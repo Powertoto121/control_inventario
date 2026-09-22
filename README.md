@@ -28,21 +28,30 @@ Si es la primera vez que descargas y configuras el proyecto en tu equipo, sigue 
 git clone <url-de-tu-repositorio>
 cd control-inventario
 
-### Copia el archivo de configuración de ejemplo de Laravel:
+2. Configurar el archivo de entorno (.env)
+Copia el archivo de configuración de ejemplo de Laravel:
 cp .env.example .env
 
-### Si no tienes PHP instalado localmente, puedes usar una imagen temporal de Composer para preparar los paquetes:
+3. Instalar dependencias de PHP (a través de Docker temporal)
+Si no tienes PHP instalado localmente, puedes usar una imagen temporal de Composer para preparar los paquetes:
 docker run --rm \
     -u "$(id -u):$(id -g)" \
     -v "$(pwd):/var/www/html" \
     -w /var/www/html \
     laravelsail/php84-composer:latest \
     composer install
-### Inicia el entorno de Docker en segundo plano:
+
+4. Levantar los contenedores con Laravel Sail
+Inicia el entorno de Docker en segundo plano:
+
 ./vendor/bin/sail up -d
-## Instala los paquetes de Node dentro del entorno:
+
+5. Instalar dependencias de Node.js y compilar assets (Vite)
+Instala los paquetes de Node dentro del entorno:
 ./vendor/bin/sail npm install
-### Crea las tablas necesarias en la base de datos PostgreSQL:
+
+6. Ejecutar migraciones de base de datos
+Crea las tablas necesarias en la base de datos PostgreSQL:
 ./vendor/bin/sail artisan migrate
 
 🖥️ Acceso a la Aplicación
