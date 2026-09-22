@@ -1,58 +1,62 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 🛒 Control de Inventario y Mermas ("Mi Tiendita")
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Sistema web desarrollado para la gestión integral de inventarios, control de caducidades (PEPS), registro rápido de mermas y análisis de pérdidas económicas en tiendas de abarrotes y comercio minorista.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 🛠️ Tecnologías Utilizadas
+* **Backend:** Laravel (PHP 8.5)
+* **Frontend:** React, TypeScript, Tailwind CSS
+* **Empaquetado y Entorno:** Docker & Laravel Sail
+* **Base de Datos:** PostgreSQL
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## ⚙️ Requisitos Previos
+Antes de clonar e iniciar el proyecto, asegúrate de tener instalado en tu equipo:
+1. [Docker Desktop](https://www.docker.com/) (corriendo en segundo plano).
+2. WSL 2 (en caso de estar usando Windows).
 
-## Learning Laravel
+---
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## 🚀 Guía de Instalación y Ejecución Local
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Si es la primera vez que descargas y configuras el proyecto en tu equipo, sigue estos pasos:
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
+### 1. Clonar el repositorio y entrar al directorio
 ```bash
-composer require laravel/boost --dev
+git clone <url-de-tu-repositorio>
+cd control-inventario
 
-php artisan boost:install
-```
+### Copia el archivo de configuración de ejemplo de Laravel:
+cp .env.example .env
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+### Si no tienes PHP instalado localmente, puedes usar una imagen temporal de Composer para preparar los paquetes:
+docker run --rm \
+    -u "$(id -u):$(id -g)" \
+    -v "$(pwd):/var/www/html" \
+    -w /var/www/html \
+    laravelsail/php84-composer:latest \
+    composer install
+### Inicia el entorno de Docker en segundo plano:
+./vendor/bin/sail up -d
+## Instala los paquetes de Node dentro del entorno:
+./vendor/bin/sail npm install
+### Crea las tablas necesarias en la base de datos PostgreSQL:
+./vendor/bin/sail artisan migrate
 
-## Contributing
+🖥️ Acceso a la Aplicación
+Una vez completados los pasos anteriores, abre tu navegador web y accede a:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+URL Principal: http://localhost:8081
 
-## Code of Conduct
+🔑 Credenciales de Acceso:
+Administrador / Dueño: admin (Clave: 1234) — Control total, analíticas y gestión de personal.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Operador / Cajero: carlos (Clave: 123) — Módulo ágil de stock y registro express de mermas.
 
-## Security Vulnerabilities
+📌 Estado del Proyecto
+Interfaz gráfica en React y TypeScript 100% responsiva y optimizada.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Módulos funcionales de Inventario, Alertas de Reabastecimiento, Merma Express y Accesos por Roles.
 
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
