@@ -1,0 +1,43 @@
+import { UsuarioCuenta } from '../types';
+
+export const USUARIOS_INICIALES: UsuarioCuenta[] = [
+  {
+    id: 'usr-admin-01',
+    username: 'admin',
+    nombre: 'Don Fernando (Dueño)',
+    password: '1234',
+    rol: 'admin',
+    email: 'admin@tienda.com',
+    avatarEmoji: '👨‍💼',
+    activo: true,
+    fechaAlta: '2026-01-10',
+    turno: 'Completo',
+    telefono: '555-019-2831',
+  },
+  {
+    id: 'usr-cajero-01',
+    username: 'carlos',
+    nombre: 'Carlos Mendoza',
+    password: '123',
+    rol: 'cajero',
+    email: 'carlos@tienda.com',
+    avatarEmoji: '🧑‍💼',
+    activo: true,
+    fechaAlta: '2026-02-15',
+    turno: 'Matutino',
+    telefono: '555-482-9011',
+  },
+  {
+    id: 'usr-cajero-02',
+    username: 'laura',
+    nombre: 'Laura Gómez',
+    password: '123',
+    rol: 'cajero',
+    email: 'laura@tienda.com',
+    avatarEmoji: '👩‍💼',
+    activo: true,
+    fechaAlta: '2026-03-01',
+    turno: 'Vespertino',
+    telefono: '555-891-3420',
+  },
+];
