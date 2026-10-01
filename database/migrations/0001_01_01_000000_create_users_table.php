@@ -14,9 +14,11 @@ return new class extends Migration
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->string('name');
+            $table->string('username')->unique(); // Apodo para iniciar sesión (ej. admin, carlos)
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            $table->string('rol')->default('cajero'); // Campo clave: 'administrador' o 'cajero'
             $table->rememberToken();
             $table->timestamps();
         });

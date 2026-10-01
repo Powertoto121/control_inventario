@@ -13,14 +13,14 @@ return new class extends Migration
 {
     Schema::create('inventario', function (Blueprint $table) {
         $table->id(); 
-        $table->foreignId('producto_id')->constrained('productos')->onDelete('cascade');
-        $table->string('codigo_lote')->nullable();
-        $table->decimal('precio_costo', 10, 2);
-        $table->decimal('precio_venta', 10, 2);
-        $table->integer('stock');
-        $table->date('fecha_caducidad')->nullable();
-        $table->date('fecha_ingreso');
-        $table->timestamps();
+    $table->foreignId('producto_id')->constrained('productos')->onDelete('cascade');
+    $table->string('codigo_lote')->nullable();
+    $table->decimal('precio_costo', 10, 2);
+    $table->decimal('precio_venta', 10, 2);
+    $table->integer('stock'); // Stock actual de este lote específico
+    $table->date('fecha_caducidad')->nullable();
+    $table->date('fecha_ingreso');
+    $table->timestamps();
     });
 }
 

@@ -13,8 +13,8 @@ return new class extends Migration
 {
     Schema::create('catalogo_mermas', function (Blueprint $table) {
         $table->id();
-        $table->string('razon');
-        $table->timestamps();
+    $table->string('razon'); // Ej. Caducado, Dañado, Robo, Otro
+    $table->timestamps();
     });
 }
 
