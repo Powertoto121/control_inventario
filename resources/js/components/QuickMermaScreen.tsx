@@ -34,11 +34,32 @@ export const QuickMermaScreen: React.FC<QuickMermaScreenProps> = ({
   );
 
   const getNombre = (p: Producto) => p.nombre ?? 'Sin nombre';
-  const getCategoria = (p: Producto) => p.categoria ?? p.category ?? 'General';
-  const getCodigo = (p: Producto) => p.codigoBarras ?? p.sku ?? String(p.id ?? '');
-  const getStock = (p: Producto) => p.stockActual ?? p.stock ?? 0;
-  const getCosto = (p: Producto) => p.costoCompra ?? p.costo ?? 0;
-  const getUnidad = (p: Producto) => p.unidadMedida ?? 'pza';
+  
+  const getCategoria = (p: Producto): string => {
+    if (typeof p.categoria === 'object' && p.categoria !== null) {
+      return (p.categoria as any).nombre ?? 'General';
+    }
+    return String(p.categoria ?? p.category ?? 'General');
+  };
+
+  const getCodigo = (p: Producto) => p.barcode ?? p.codigoBarras ?? p.sku ?? String(p.id ?? '');
+  
+  const getStock = (p: Producto): number => {
+    if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
+      return p.inventarios.reduce((acc, inv) => acc + Number(inv.stock ?? 0), 0);
+    }
+    return Number(p.stockActual ?? p.stock ?? 0);
+  };
+
+  const getUnidad = (p: Producto) => p.unidad_medida ?? p.unidadMedida ?? 'pza';
+
+  // Función auxiliar blindada para el costo de compra
+  const getCost = (p: Producto): number => {
+    if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
+      return Number(p.inventarios[0]?.precio_costo ?? 0);
+    }
+    return Number(p.costoCompra ?? p.costo ?? 0);
+  };
 
   useEffect(() => {
     if (currentUser) {
@@ -50,7 +71,7 @@ export const QuickMermaScreen: React.FC<QuickMermaScreenProps> = ({
     (p) => String(p.id) === String(selectedProductoId)
   );
 
-  const categoriasDisponibles = ['Todas', ...Array.from(new Set(productos.map((p) => getCategoria(p))))];
+  const categoriasDisponibles: string[] = ['Todas', ...Array.from(new Set(productos.map((p) => getCategoria(p))))];
 
   const filteredProductos = productos.filter((p) => {
     const matchesSearch =
@@ -64,7 +85,7 @@ export const QuickMermaScreen: React.FC<QuickMermaScreenProps> = ({
   });
 
   const costoTotalEstimado = selectedProduct
-    ? (getCosto(selectedProduct) * cantidad).toFixed(2)
+    ? (getCost(selectedProduct) * cantidad).toFixed(2)
     : '0.00';
 
   const handleConfirm = () => {
@@ -133,7 +154,7 @@ export const QuickMermaScreen: React.FC<QuickMermaScreenProps> = ({
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
               {categoriasDisponibles.map((cat: string) => (
                 <button
-                  key={cat}
+                  key={`cat-screen-${cat}`}
                   onClick={() => setSelectedCategory(cat)}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition cursor-pointer ${
                     selectedCategory === cat

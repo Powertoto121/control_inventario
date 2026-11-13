@@ -28,13 +28,28 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   useEffect(() => {
     if (productToEdit) {
       setNombre(productToEdit.nombre || '');
-      setCategoria(productToEdit.categoria || productToEdit.category || 'Abarrotes');
-      setCodigoBarras(productToEdit.codigoBarras || productToEdit.sku || '');
-      setUnidadMedida(productToEdit.unidadMedida || 'pza');
-      setCostoCompra(productToEdit.costoCompra ?? productToEdit.costo ?? 15);
-      setPrecioVenta(productToEdit.precioVenta ?? productToEdit.precio ?? 22);
-      setStockActual(productToEdit.stockActual ?? productToEdit.stock ?? 10);
-      setStockMinimo(productToEdit.stockMinimo ?? productToEdit.minStock ?? 5);
+      
+      // Extracción segura de categoría (puede venir como objeto relacional de Eloquent o string)
+      const catVal = typeof productToEdit.categoria === 'object' && productToEdit.categoria !== null
+        ? (productToEdit.categoria as any).nombre
+        : (productToEdit.categoria || productToEdit.category || 'Abarrotes');
+      setCategoria(catVal);
+
+      setCodigoBarras(productToEdit.barcode || productToEdit.codigoBarras || productToEdit.sku || '');
+      setUnidadMedida(productToEdit.unidad_medida || productToEdit.unidadMedida || 'pza');
+      
+      // Extracción segura de costos y precios (soporta relación inventarios o campos directos)
+      const inventarioObj = Array.isArray(productToEdit.inventarios) && productToEdit.inventarios.length > 0 
+        ? productToEdit.inventarios[0] 
+        : null;
+
+      setCostoCompra(Number(inventarioObj?.precio_costo ?? productToEdit.costoCompra ?? productToEdit.costo ?? 15));
+      setPrecioVenta(Number(inventarioObj?.precio_venta ?? productToEdit.precioVenta ?? productToEdit.precio ?? 22));
+      
+      const stockVal = inventarioObj?.stock ?? productToEdit.stockActual ?? productToEdit.stock ?? 10;
+      setStockActual(Number(stockVal));
+      
+      setStockMinimo(Number(productToEdit.min_stock ?? productToEdit.stockMinimo ?? productToEdit.minStock ?? 5));
     } else {
       setNombre('');
       setCategoria('Abarrotes');
@@ -65,22 +80,27 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     e.preventDefault();
     if (!nombre.trim()) return;
 
+    const barcodeFinal = codigoBarras.trim() || Math.floor(100000000000 + Math.random() * 900000000000).toString();
+
     onSaveProduct(
       {
         nombre: nombre.trim(),
         categoria,
         category: categoria,
-        codigoBarras: codigoBarras.trim() || Math.floor(100000000000 + Math.random() * 900000000000).toString(),
-        sku: codigoBarras.trim() || Math.floor(100000000000 + Math.random() * 900000000000).toString(),
+        barcode: barcodeFinal,
+        codigoBarras: barcodeFinal,
+        sku: barcodeFinal,
+        unidad_medida: unidadMedida,
         unidadMedida,
+        min_stock: Number(stockMinimo),
+        stockMinimo: Number(stockMinimo),
+        minStock: Number(stockMinimo),
         costoCompra: Number(costoCompra),
         costo: Number(costoCompra),
         precioVenta: Number(precioVenta),
         precio: Number(precioVenta),
         stockActual: Number(stockActual),
         stock: Number(stockActual),
-        stockMinimo: Number(stockMinimo),
-        minStock: Number(stockMinimo),
         tasaVentaDiaria: productToEdit?.tasaVentaDiaria ?? 3,
         imagenEmoji: typeof categoryIcon === 'string' ? categoryIcon : '📦',
         fechaCaducidadProxima: productToEdit?.fechaCaducidadProxima,

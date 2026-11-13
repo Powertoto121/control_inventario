@@ -41,11 +41,31 @@ export const QuickMermaModal: React.FC<QuickMermaModalProps> = ({
   const [paso, setPaso] = useState<1 | 2>(initialProducto ? 2 : 1);
 
   const getNombre = (p: Producto) => p.nombre ?? 'Sin nombre';
-  const getCategoria = (p: Producto) => p.categoria ?? p.category ?? 'General';
-  const getCodigo = (p: Producto) => p.codigoBarras ?? p.sku ?? String(p.id ?? '');
-  const getStock = (p: Producto) => p.stockActual ?? p.stock ?? 0;
-  const getCosto = (p: Producto) => p.costoCompra ?? p.costo ?? 0;
-  const getUnidad = (p: Producto) => p.unidadMedida ?? 'pza';
+  
+  const getCategoria = (p: Producto): string => {
+    if (typeof p.categoria === 'object' && p.categoria !== null) {
+      return (p.categoria as any).nombre ?? 'General';
+    }
+    return String(p.categoria ?? p.category ?? 'General');
+  };
+
+  const getCodigo = (p: Producto) => p.barcode ?? p.codigoBarras ?? p.sku ?? String(p.id ?? '');
+  
+  const getStock = (p: Producto): number => {
+    if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
+      return p.inventarios.reduce((acc, inv) => acc + Number(inv.stock ?? 0), 0);
+    }
+    return Number(p.stockActual ?? p.stock ?? 0);
+  };
+
+  const getCosto = (p: Producto): number => {
+    if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
+      return Number(p.inventarios[0]?.precio_costo ?? 0);
+    }
+    return Number(p.costoCompra ?? p.costo ?? 0);
+  };
+
+  const getUnidad = (p: Producto) => p.unidad_medida ?? p.unidadMedida ?? 'pza';
 
   const renderIcon = (icon: any) => {
     if (typeof icon === 'function') {

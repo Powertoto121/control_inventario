@@ -34,7 +34,10 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       setNombre(userToEdit.nombre || userToEdit.name || '');
       setUsername(userToEdit.username || '');
       setPassword(userToEdit.password || '123');
-      setRol(userToEdit.rol || userToEdit.role || 'cajero');
+      
+      const roleVal = userToEdit.rol || userToEdit.role || 'cajero';
+      setRol(roleVal);
+      
       setTurno(userToEdit.turno || 'Matutino');
       setTelefono(userToEdit.telefono || '');
       setAvatarEmoji(userToEdit.avatarEmoji || userToEdit.avatar || '🧑‍💼');

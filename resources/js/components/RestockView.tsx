@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Producto } from '../types';
+import { Producto, Usuario } from '../types';
 import { getFifoStatus } from '../utils/fifoUtils';
 import {
   RefreshCw,
@@ -14,25 +14,44 @@ import {
 
 interface RestockViewProps {
   productos: Producto[];
+  currentUser?: Usuario | null;
   onOpenNewProductModal?: () => void;
   onOpenQuickMermaForProduct?: (product: Producto) => void;
 }
 
 export const RestockView: React.FC<RestockViewProps> = ({
   productos = [],
+  currentUser,
   onOpenNewProductModal,
   onOpenQuickMermaForProduct,
 }) => {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'todos' | 'agotados' | 'bajos' | 'criticos_peps'>('todos');
 
-  // Extractores seguros
+  // Identificar si el usuario actual es cajero
+  const isCajero = (currentUser?.rol || currentUser?.role) === 'cajero';
+
+  // Extractores seguros adaptados a PostgreSQL y relaciones Eloquent
   const getNombre = (p: Producto) => p.nombre ?? 'Sin nombre';
-  const getCategoria = (p: Producto) => p.categoria ?? p.category ?? 'General';
-  const getCodigo = (p: Producto) => p.codigoBarras ?? p.sku ?? String(p.id ?? '');
-  const getStock = (p: Producto) => p.stockActual ?? p.stock ?? 0;
-  const getMinStock = (p: Producto) => p.stockMinimo ?? p.minStock ?? 1;
-  const getUnidad = (p: Producto) => p.unidadMedida ?? 'pza';
+  
+  const getCategoria = (p: Producto): string => {
+    if (typeof p.categoria === 'object' && p.categoria !== null) {
+      return (p.categoria as any).nombre ?? 'General';
+    }
+    return String(p.categoria ?? p.category ?? 'General');
+  };
+
+  const getCodigo = (p: Producto) => p.barcode ?? p.codigoBarras ?? p.sku ?? String(p.id ?? '');
+  
+  const getStock = (p: Producto): number => {
+    if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
+      return p.inventarios.reduce((acc, inv) => acc + Number(inv.stock ?? 0), 0);
+    }
+    return Number(p.stockActual ?? p.stock ?? 0);
+  };
+
+  const getMinStock = (p: Producto): number => Number(p.min_stock ?? p.stockMinimo ?? p.minStock ?? 1);
+  const getUnidad = (p: Producto) => p.unidad_medida ?? p.unidadMedida ?? 'pza';
 
   // Productos que requieren atención (Agotados, Bajos o Próximos a Vencer)
   const productosEnAlerta = productos.filter((p) => {
@@ -94,7 +113,8 @@ export const RestockView: React.FC<RestockViewProps> = ({
             </p>
           </div>
 
-          {onOpenNewProductModal && (
+          {/* Ocultar botón de Alta si es cajero */}
+          {!isCajero && onOpenNewProductModal && (
             <button
               onClick={onOpenNewProductModal}
               className="self-start sm:self-auto px-4 py-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center gap-2 shrink-0"

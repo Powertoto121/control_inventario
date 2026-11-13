@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Producto, Usuario, RegistroMerma, MotivoMermaId } from './types';
-import { PRODUCTOS_INICIALES, REGISTROS_MERMA_INICIALES, MOTIVOS_MERMA } from './data/initialData';
+import { REGISTROS_MERMA_INICIALES, MOTIVOS_MERMA } from './data/initialData';
 import { USUARIOS_INICIALES } from './data/initialUsers';
 
 import { Navbar } from './components/Navbar';
@@ -18,10 +18,15 @@ import { QuickMermaModal } from './components/QuickMermaModal';
 import { NotificationToast } from './components/NotificationToast';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
+  // Mantener la sesión activa al recargar la página usando localStorage
+  const [currentUser, setCurrentUser] = useState<Usuario | null>(() => {
+    const savedUser = localStorage.getItem('mi_tiendita_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+
   const [currentTab, setCurrentTab] = useState<'inventory' | 'quick-merma' | 'restock' | 'analytics' | 'users'>('inventory');
 
-  const [productos, setProductos] = useState<Producto[]>(PRODUCTOS_INICIALES);
+  const [productos, setProductos] = useState<Producto[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>(USUARIOS_INICIALES);
   const [mermas, setMermas] = useState<RegistroMerma[]>(REGISTROS_MERMA_INICIALES);
 
@@ -42,12 +47,32 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // Cargar productos reales desde la API de Laravel (PostgreSQL) al iniciar sesión o recargar
+  useEffect(() => {
+    if (currentUser) {
+      fetch('/api/productos', {
+        headers: {
+          'Accept': 'application/json',
+        },
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setProductos(data);
+          }
+        })
+        .catch((err) => {
+          console.error('Error al cargar los productos de la base de datos:', err);
+        });
+    }
+  }, [currentUser]);
+
   if (!currentUser) {
     return (
       <LoginScreen
-        usuarios={usuarios}
         onLogin={(user) => {
           setCurrentUser(user);
+          localStorage.setItem('mi_tiendita_user', JSON.stringify(user));
           showToast(`¡Bienvenido de nuevo, ${user.nombre || user.name}!`);
         }}
       />
@@ -153,9 +178,6 @@ export default function App() {
 
   const countAlertas = productos.filter((p) => (p.stockActual ?? p.stock ?? 0) <= (p.stockMinimo ?? p.minStock ?? 1)).length;
 
-  const userRoleStr = currentUser.rol || currentUser.role || '';
-  const isAdminRole = userRoleStr === 'admin' || userRoleStr === 'Administrador';
-
   return (
     <div className="min-h-screen bg-stone-100 flex flex-col font-sans text-stone-900 pb-12">
       <Navbar
@@ -164,6 +186,7 @@ export default function App() {
         onSelectTab={(tab) => setCurrentTab(tab)}
         onLogout={() => {
           setCurrentUser(null);
+          localStorage.removeItem('mi_tiendita_user');
           showToast('Sesión cerrada correctamente.');
         }}
         onOpenQuickMerma={() => {
@@ -197,6 +220,7 @@ export default function App() {
         {currentTab === 'restock' && (
           <RestockView
             productos={productos}
+            currentUser={currentUser}
             onOpenNewProductModal={() => {
               setProductToEdit(null);
               setIsProductModalOpen(true);

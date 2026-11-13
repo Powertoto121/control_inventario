@@ -37,17 +37,48 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
   const isCajero = (currentUser?.rol || currentUser?.role) === 'cajero';
 
-  // Extractores seguros
+  // Extractores seguros adaptados a la base de datos PostgreSQL y relaciones Eloquent (Blindados contra nulos)
   const getNombre = (p: Producto) => p.nombre ?? 'Sin nombre';
-  const getCategoria = (p: Producto) => p.categoria ?? p.category ?? 'General';
-  const getCodigo = (p: Producto) => p.codigoBarras ?? p.sku ?? String(p.id ?? '');
-  const getStock = (p: Producto) => p.stockActual ?? p.stock ?? 0;
-  const getMinStock = (p: Producto) => p.stockMinimo ?? p.minStock ?? 1;
-  const getCosto = (p: Producto) => p.costoCompra ?? p.costo ?? 0;
-  const getPrecio = (p: Producto) => p.precioVenta ?? p.precio ?? 0;
+  
+  const getCategoria = (p: Producto): string => {
+    if (typeof p.categoria === 'object' && p.categoria !== null) {
+      return (p.categoria as any).nombre ?? 'General';
+    }
+    return String(p.categoria ?? p.category ?? 'General');
+  };
+
+  const getCodigo = (p: Producto) => p.barcode ?? p.codigoBarras ?? p.sku ?? String(p.id ?? '');
+  
+  const getStock = (p: Producto): number => {
+    if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
+      return p.inventarios.reduce((acc, inv) => acc + Number(inv.stock ?? 0), 0);
+    }
+    return Number(p.stockActual ?? p.stock ?? 0);
+  };
+
+  const getMinStock = (p: Producto): number => Number(p.min_stock ?? p.stockMinimo ?? p.minStock ?? 1);
+  
+  const getCosto = (p: Producto): number => {
+    if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
+      return Number(p.inventarios[0]?.precio_costo ?? 0);
+    }
+    return Number(p.costoCompra ?? p.costo ?? 0);
+  };
+
+  const getPrecio = (p: Producto): number => {
+    if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
+      return Number(p.inventarios[0]?.precio_venta ?? 0);
+    }
+    return Number(p.precioVenta ?? p.precio ?? 0);
+  };
+
   const getUnidad = (p: Producto) => p.unidadMedida ?? 'pza';
 
-  const categorias = ['Todas', ...Array.from(new Set(productos.map((p) => getCategoria(p))))];
+  // Obtener categorías únicas garantizando que sean strings
+  const categorias: string[] = [
+    'Todas',
+    ...Array.from(new Set(productos.map((p) => getCategoria(p))))
+  ];
 
   const filtered = productos.filter((p) => {
     const q = search.toLowerCase();
@@ -76,7 +107,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 scrollbar-none">
           {categorias.map((cat) => (
             <button
-              key={cat}
+              key={`cat-filter-${cat}`}
               onClick={() => setSelectedCategory(cat)}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
                 selectedCategory === cat
@@ -129,8 +160,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div className="flex items-center gap-2.5">
                     <span className="text-xl w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center shrink-0">
-  📦
-</span>
+                      📦
+                    </span>
                     <div>
                       <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">
                         {categoria}

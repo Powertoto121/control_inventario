@@ -26,8 +26,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   totalAlertsCount,
 }) => {
-  const isCajero = (currentUser.rol || currentUser.role) === 'cajero';
+  const isCajero = (currentUser?.rol || currentUser?.role) === 'cajero';
   const roleName = isCajero ? 'Operador / Cajero' : 'Administrador';
+  const userName = currentUser?.nombre || currentUser?.name || 'Usuario';
 
   return (
     <header className="bg-white border-b border-stone-200 sticky top-0 z-30 shadow-2xs">
@@ -53,7 +54,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
               <div className="text-xs">
                 <p className="font-bold text-stone-900 leading-none">
-                  {currentUser.nombre || currentUser.name}
+                  {userName}
                 </p>
                 <span className="text-[10px] text-stone-500 font-medium">
                   {roleName}
