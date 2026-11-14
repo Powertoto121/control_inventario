@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 use App\Models\Categoria;
 use App\Models\CatalogoMerma;
-use App\Models\Producto;docker compose exec laravel.test npm run build
+use App\Models\Producto;
 use App\Models\Inventario;
 
 class DatabaseSeeder extends Seeder
