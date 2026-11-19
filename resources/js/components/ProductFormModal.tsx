@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Producto } from '../types';
 import { getCategoryIcon } from '../utils/categoryUtils';
-import { X, Check, Barcode } from 'lucide-react';
+import { X, Check, Barcode, Calendar } from 'lucide-react';
 
 interface ProductFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaveProduct: (productData: Omit<Producto, 'id'>, existingId?: number) => void;
+  onSaveProduct: (productData: any, existingId?: number) => void;
   productToEdit?: Producto | null;
 }
 
@@ -24,12 +24,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [precioVenta, setPrecioVenta] = useState<number>(22);
   const [stockActual, setStockActual] = useState<number>(10);
   const [stockMinimo, setStockMinimo] = useState<number>(5);
+  const [fechaCaducidad, setFechaCaducidad] = useState<string>('');
 
   useEffect(() => {
     if (productToEdit) {
       setNombre(productToEdit.nombre || '');
-      
-      // Extracción segura de categoría (puede venir como objeto relacional de Eloquent o string)
+
       const catVal = typeof productToEdit.categoria === 'object' && productToEdit.categoria !== null
         ? (productToEdit.categoria as any).nombre
         : (productToEdit.categoria || productToEdit.category || 'Abarrotes');
@@ -37,19 +37,21 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
       setCodigoBarras(productToEdit.barcode || productToEdit.codigoBarras || productToEdit.sku || '');
       setUnidadMedida(productToEdit.unidad_medida || productToEdit.unidadMedida || 'pza');
-      
-      // Extracción segura de costos y precios (soporta relación inventarios o campos directos)
-      const inventarioObj = Array.isArray(productToEdit.inventarios) && productToEdit.inventarios.length > 0 
-        ? productToEdit.inventarios[0] 
+
+      const inventarioObj = Array.isArray(productToEdit.inventarios) && productToEdit.inventarios.length > 0
+        ? productToEdit.inventarios[0]
         : null;
 
       setCostoCompra(Number(inventarioObj?.precio_costo ?? productToEdit.costoCompra ?? productToEdit.costo ?? 15));
       setPrecioVenta(Number(inventarioObj?.precio_venta ?? productToEdit.precioVenta ?? productToEdit.precio ?? 22));
-      
+
       const stockVal = inventarioObj?.stock ?? productToEdit.stockActual ?? productToEdit.stock ?? 10;
       setStockActual(Number(stockVal));
-      
+
       setStockMinimo(Number(productToEdit.min_stock ?? productToEdit.stockMinimo ?? productToEdit.minStock ?? 5));
+
+      const rawCaducidad = inventarioObj?.fecha_caducidad ?? productToEdit.fechaCaducidadProxima ?? '';
+      setFechaCaducidad(rawCaducidad ? String(rawCaducidad).split('T')[0] : '');
     } else {
       setNombre('');
       setCategoria('Abarrotes');
@@ -59,21 +61,31 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setPrecioVenta(22);
       setStockActual(10);
       setStockMinimo(5);
+      setFechaCaducidad('');
     }
   }, [productToEdit, isOpen]);
 
   if (!isOpen) return null;
 
-  const categoryIcon = getCategoryIcon(categoria);
+  const categoryIconData = getCategoryIcon(categoria);
 
-  const renderIcon = (icon: any) => {
-    if (typeof icon === 'function') {
-      return React.createElement(icon, { className: 'w-5 h-5' });
+  const renderIcon = (iconObj: any) => {
+    if (typeof iconObj === 'string') {
+      return <span>{iconObj}</span>;
     }
-    if (React.isValidElement(icon)) {
-      return icon;
+    if (typeof iconObj === 'function') {
+      return React.createElement(iconObj, { className: 'w-5 h-5' });
     }
-    return <span>{String(icon ?? '📦')}</span>;
+    if (React.isValidElement(iconObj)) {
+      return iconObj;
+    }
+    if (iconObj && typeof iconObj === 'object') {
+      const inner = iconObj.icon || iconObj.emoji;
+      if (typeof inner === 'string') return <span>{inner}</span>;
+      if (typeof inner === 'function') return React.createElement(inner, { className: 'w-5 h-5' });
+      if (React.isValidElement(inner)) return inner;
+    }
+    return <span>📦</span>;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -81,6 +93,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     if (!nombre.trim()) return;
 
     const barcodeFinal = codigoBarras.trim() || Math.floor(100000000000 + Math.random() * 900000000000).toString();
+    const emojiStr = typeof categoryIconData === 'string'
+      ? categoryIconData
+      : (typeof (categoryIconData as any)?.icon === 'string' ? (categoryIconData as any).icon : '📦');
 
     onSaveProduct(
       {
@@ -101,9 +116,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         precio: Number(precioVenta),
         stockActual: Number(stockActual),
         stock: Number(stockActual),
+        fecha_caducidad: fechaCaducidad || null,
+        fechaCaducidadProxima: fechaCaducidad || undefined,
         tasaVentaDiaria: productToEdit?.tasaVentaDiaria ?? 3,
-        imagenEmoji: typeof categoryIcon === 'string' ? categoryIcon : '📦',
-        fechaCaducidadProxima: productToEdit?.fechaCaducidadProxima,
+        imagenEmoji: emojiStr,
       },
       productToEdit?.id ? Number(productToEdit.id) : undefined
     );
@@ -119,9 +135,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-stone-200 overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="bg-stone-50 border-b border-stone-200 px-5 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-800">
-              {renderIcon(categoryIcon)}
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-800 shrink-0">
+              {renderIcon(categoryIconData)}
             </span>
             <div>
               <h3 className="text-base font-bold text-stone-900">
@@ -286,6 +302,21 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
+          </div>
+
+          {/* Fecha de Caducidad (PEPS) */}
+          <div>
+            <label className="text-xs font-semibold text-stone-700 flex items-center gap-1.5 mb-1">
+              <Calendar className="w-3.5 h-3.5 text-amber-600" />
+              <span>Fecha de Caducidad (Opcional - Alertas PEPS)</span>
+            </label>
+            <input
+              type="date"
+              id="product-input-expiry"
+              value={fechaCaducidad}
+              onChange={(e) => setFechaCaducidad(e.target.value)}
+              className="w-full px-3.5 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
           </div>
 
           {/* Submit */}

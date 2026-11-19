@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Producto, Usuario, RegistroMerma, MotivoMermaId } from './types';
-import { REGISTROS_MERMA_INICIALES, MOTIVOS_MERMA } from './data/initialData';
-import { USUARIOS_INICIALES } from './data/initialUsers';
 
 import { Navbar } from './components/Navbar';
 import { LoginScreen } from './components/LoginScreen';
@@ -18,7 +16,6 @@ import { QuickMermaModal } from './components/QuickMermaModal';
 import { NotificationToast } from './components/NotificationToast';
 
 export default function App() {
-  // Mantener la sesión activa al recargar la página usando localStorage
   const [currentUser, setCurrentUser] = useState<Usuario | null>(() => {
     const savedUser = localStorage.getItem('mi_tiendita_user');
     return savedUser ? JSON.parse(savedUser) : null;
@@ -27,8 +24,8 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<'inventory' | 'quick-merma' | 'restock' | 'analytics' | 'users'>('inventory');
 
   const [productos, setProductos] = useState<Producto[]>([]);
-  const [usuarios, setUsuarios] = useState<Usuario[]>(USUARIOS_INICIALES);
-  const [mermas, setMermas] = useState<RegistroMerma[]>(REGISTROS_MERMA_INICIALES);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [mermas, setMermas] = useState<RegistroMerma[]>([]);
 
   // Modales
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -47,23 +44,53 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Cargar productos reales desde la API de Laravel (PostgreSQL) al iniciar sesión o recargar
+  const fetchProductos = async () => {
+    try {
+      const res = await fetch('/api/productos', {
+        headers: { 'Accept': 'application/json' },
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setProductos(data);
+      }
+    } catch (err) {
+      console.error('Error al cargar los productos de la base de datos:', err);
+    }
+  };
+
+  const fetchMermas = async () => {
+    try {
+      const res = await fetch('/api/mermas', {
+        headers: { 'Accept': 'application/json' },
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setMermas(data);
+      }
+    } catch (err) {
+      console.error('Error al cargar las mermas de la base de datos:', err);
+    }
+  };
+
+  const fetchUsuarios = async () => {
+    try {
+      const res = await fetch('/api/users', {
+        headers: { 'Accept': 'application/json' },
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setUsuarios(data);
+      }
+    } catch (err) {
+      console.error('Error al cargar los usuarios de la base de datos:', err);
+    }
+  };
+
   useEffect(() => {
     if (currentUser) {
-      fetch('/api/productos', {
-        headers: {
-          'Accept': 'application/json',
-        },
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) {
-            setProductos(data);
-          }
-        })
-        .catch((err) => {
-          console.error('Error al cargar los productos de la base de datos:', err);
-        });
+      fetchProductos();
+      fetchMermas();
+      fetchUsuarios();
     }
   }, [currentUser]);
 
@@ -72,6 +99,7 @@ export default function App() {
       <LoginScreen
         onLogin={(user) => {
           setCurrentUser(user);
+          setCurrentTab('inventory');
           localStorage.setItem('mi_tiendita_user', JSON.stringify(user));
           showToast(`¡Bienvenido de nuevo, ${user.nombre || user.name}!`);
         }}
@@ -79,30 +107,57 @@ export default function App() {
     );
   }
 
-  // Manejadores de Productos
-  const handleSaveProduct = (productData: Omit<Producto, 'id'>, existingId?: number) => {
-    if (existingId) {
-      setProductos((prev) =>
-        prev.map((p) => (p.id === existingId ? { ...p, ...productData, id: existingId } : p))
-      );
-      showToast('¡Producto actualizado exitosamente!');
-    } else {
-      const newProd: Producto = {
-        ...productData,
-        id: Date.now(),
-      };
-      setProductos((prev) => [newProd, ...prev]);
-      showToast('¡Nuevo producto registrado en inventario!');
+  const isAdmin = currentUser.rol === 'admin' || currentUser.rol === 'administrador' || currentUser.role === 'admin' || currentUser.role === 'administrador';
+
+  const handleSaveProduct = async (productData: any, existingId?: number) => {
+    try {
+      if (existingId) {
+        const res = await fetch(`/api/productos/${existingId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(productData),
+        });
+        if (!res.ok) throw new Error('Error al actualizar en servidor');
+        await fetchProductos();
+        showToast('¡Producto actualizado exitosamente en la BD!');
+      } else {
+        const res = await fetch('/api/productos', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(productData),
+        });
+        if (!res.ok) throw new Error('Error al crear en servidor');
+        await fetchProductos();
+        showToast('¡Nuevo producto guardado en la base de datos!');
+      }
+    } catch (error) {
+      console.error(error);
+      showToast('Error al guardar el producto en la base de datos.');
     }
   };
 
-  const handleDeleteProduct = (productId: number | string) => {
-    setProductos((prev) => prev.filter((p) => p.id !== productId));
-    showToast('Producto eliminado del inventario.');
+  const handleDeleteProduct = async (productId: number | string) => {
+    try {
+      const res = await fetch(`/api/productos/${productId}`, {
+        method: 'DELETE',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!res.ok && res.status !== 404) throw new Error('Error al eliminar');
+      setProductos((prev) => prev.filter((p) => p.id !== productId));
+      showToast('Producto eliminado de la base de datos.');
+    } catch (error) {
+      console.error(error);
+      showToast('No se pudo eliminar el producto.');
+    }
   };
 
-  // Manejadores de Mermas
-  const handleSaveMerma = (mermaData: {
+  const handleSaveMerma = async (mermaData: {
     productoId: any;
     cantidad: number;
     motivoId: MotivoMermaId;
@@ -113,54 +168,73 @@ export default function App() {
     if (!prod) return;
 
     const cantidadRetirada = Number(mermaData.cantidad);
-    const stockActual = prod.stockActual ?? prod.stock ?? 0;
-    const nuevoStock = Math.max(0, stockActual - cantidadRetirada);
 
-    setProductos((prev) =>
-      prev.map((p) =>
-        String(p.id) === String(prod.id)
-          ? { ...p, stockActual: nuevoStock, stock: nuevoStock }
-          : p
-      )
-    );
+    try {
+      const res = await fetch('/api/mermas', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          productoId: prod.id,
+          user_id: currentUser.id ?? 1,
+          cantidad: cantidadRetirada,
+          notas: mermaData.notas,
+        }),
+      });
 
-    const motivoObj = MOTIVOS_MERMA.find((m) => m.id === mermaData.motivoId);
-    const costoUnit = prod.costoCompra ?? prod.costo ?? 0;
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.message || 'Error al registrar la merma.');
+        return;
+      }
 
-    const nuevaMerma: RegistroMerma = {
-      id: Date.now(),
-      productoId: prod.id,
-      productoNombre: prod.nombre ?? 'Sin nombre',
-      cantidad: cantidadRetirada,
-      motivoId: mermaData.motivoId,
-      motivo: motivoObj ? (motivoObj.nombre || motivoObj.label) : 'Merma general',
-      costoUnitario: costoUnit,
-      costoTotalPerdida: costoUnit * cantidadRetirada,
-      responsable: mermaData.responsable,
-      fecha: new Date().toISOString().split('T')[0],
-      notas: mermaData.notas,
-    };
-
-    setMermas((prev) => [nuevaMerma, ...prev]);
-    showToast(`Merma registrada: -${cantidadRetirada} ${prod.unidadMedida || 'pza'} de ${prod.nombre}`);
+      await fetchProductos();
+      await fetchMermas();
+      showToast(`Merma guardada en BD: -${cantidadRetirada} de ${prod.nombre}`);
+    } catch (error) {
+      console.error(error);
+      showToast('Error de conexión al registrar merma.');
+    }
   };
 
-  // Manejadores de Usuarios
-  const handleSaveUser = (userData: Omit<Usuario, 'id'>, existingId?: number) => {
-    if (existingId) {
-      setUsuarios((prev) =>
-        prev.map((u) => (u.id === existingId ? { ...u, ...userData, id: existingId } : u))
-      );
-      showToast('¡Datos del empleado actualizados!');
-    } else {
-      const newUser: Usuario = {
-        ...userData,
-        id: Date.now(),
-        fechaAlta: new Date().toISOString().split('T')[0],
-        activo: true,
-      };
-      setUsuarios((prev) => [newUser, ...prev]);
-      showToast('¡Nuevo empleado registrado con éxito!');
+  const handleSaveUser = async (userData: any, existingId?: number | string) => {
+    const idToUpdate = existingId ?? userData.id;
+
+    try {
+      if (idToUpdate) {
+        const res = await fetch(`/api/users/${idToUpdate}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(userData),
+        });
+        if (!res.ok) throw new Error('Error al actualizar usuario');
+        await fetchUsuarios();
+        showToast('¡Datos del empleado actualizados en la BD!');
+      } else {
+        const res = await fetch('/api/users', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(userData),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast(data.message || 'Error al registrar empleado');
+          return;
+        }
+        await fetchUsuarios();
+        showToast('¡Nuevo empleado registrado en PostgreSQL!');
+      }
+    } catch (error) {
+      console.error(error);
+      showToast('Error al guardar el usuario en la base de datos.');
     }
   };
 
@@ -171,12 +245,26 @@ export default function App() {
     showToast('Estado del usuario actualizado.');
   };
 
-  const handleDeleteUser = (userId: number | string) => {
-    setUsuarios((prev) => prev.filter((u) => u.id !== userId));
-    showToast('Empleado eliminado del sistema.');
+  const handleDeleteUser = async (userId: number | string) => {
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!res.ok) throw new Error('Error al eliminar usuario');
+      setUsuarios((prev) => prev.filter((u) => u.id !== userId));
+      showToast('Empleado eliminado de la base de datos.');
+    } catch (error) {
+      console.error(error);
+      showToast('No se pudo eliminar el empleado.');
+    }
   };
 
-  const countAlertas = productos.filter((p) => (p.stockActual ?? p.stock ?? 0) <= (p.stockMinimo ?? p.minStock ?? 1)).length;
+  const countAlertas = productos.filter((p) => {
+    const stock = p.inventarios?.[0]?.stock ?? p.stockActual ?? p.stock ?? 0;
+    const min = p.min_stock ?? p.stockMinimo ?? p.minStock ?? 1;
+    return stock <= min;
+  }).length;
 
   return (
     <div className="min-h-screen bg-stone-100 flex flex-col font-sans text-stone-900 pb-12">
@@ -186,6 +274,7 @@ export default function App() {
         onSelectTab={(tab) => setCurrentTab(tab)}
         onLogout={() => {
           setCurrentUser(null);
+          setCurrentTab('inventory');
           localStorage.removeItem('mi_tiendita_user');
           showToast('Sesión cerrada correctamente.');
         }}
@@ -232,11 +321,11 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'analytics' && (
+        {currentTab === 'analytics' && isAdmin && (
           <LossAnalyticsView mermas={mermas} productos={productos} />
         )}
 
-        {currentTab === 'users' && (
+        {currentTab === 'users' && isAdmin && (
           <UsersManagementView
             usuarios={usuarios}
             currentUser={currentUser}
@@ -300,7 +389,6 @@ export default function App() {
   );
 }
 
-// Montaje automático de React en el DOM de Laravel
 const rootElement = document.getElementById('app');
 if (rootElement) {
   const root = ReactDOM.createRoot(rootElement);
