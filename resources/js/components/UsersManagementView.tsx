@@ -10,9 +10,10 @@ import {
   Edit2,
   Trash2,
   CheckCircle2,
+  UserX,
   Clock,
   Phone,
-  Info,
+  Store,
 } from 'lucide-react';
 
 interface UsersManagementViewProps {
@@ -33,15 +34,21 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
   onDeleteUser,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'todos' | 'cajero' | 'admin'>('todos');
+  const [filterMode, setFilterMode] = useState<'todos' | 'cajero' | 'admin' | 'inactivos'>('todos');
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
 
-  // Helpers de extracción segura para compatibilidad con la interfaz unificada
   const getNombre = (u: Usuario) => u.nombre || u.name || 'Sin nombre';
   const getUsername = (u: Usuario) => u.username || '';
   const getRol = (u: Usuario) => u.rol || u.role || 'cajero';
-  const getAvatar = (u: Usuario) => u.avatarEmoji || u.avatar || (getRol(u) === 'cajero' ? '🧑‍💼' : '👨‍💼');
   const getActivo = (u: Usuario) => u.activo ?? true;
+
+  const getInitials = (nombre: string): string => {
+    const parts = nombre.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return nombre.slice(0, 2).toUpperCase() || 'US';
+  };
 
   const togglePasswordVisibility = (userId: string | number) => {
     const key = String(userId);
@@ -62,15 +69,19 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
       username.includes(q) ||
       tel.includes(searchTerm);
 
-    const matchesRole = roleFilter === 'todos' || getRol(u) === roleFilter;
+    if (!matchesSearch) return false;
 
-    return matchesSearch && matchesRole;
+    if (filterMode === 'cajero') return getRol(u) === 'cajero';
+    if (filterMode === 'admin') return getRol(u) === 'admin';
+    if (filterMode === 'inactivos') return !getActivo(u);
+    return true;
   });
 
   const totalUsuarios = usuarios.length;
   const totalCajeros = usuarios.filter((u) => getRol(u) === 'cajero').length;
   const totalAdmins = usuarios.filter((u) => getRol(u) === 'admin').length;
   const totalActivos = usuarios.filter((u) => getActivo(u)).length;
+  const totalDeshabilitados = usuarios.filter((u) => !getActivo(u)).length;
 
   const currentUsername = getUsername(currentUser).toLowerCase();
 
@@ -88,7 +99,7 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
               Gestión de Personal & Accesos
             </h2>
             <p className="text-xs sm:text-sm text-stone-600 max-w-2xl mt-1 leading-relaxed">
-              Da de alta a nuevos trabajadores, define sus credenciales para inicio rápido en mostrador y controla sus permisos operativos por rol.
+              Da de alta trabajadores, asigna credenciales de mostrador y habilita o bloquea accesos al sistema.
             </p>
           </div>
 
@@ -103,8 +114,8 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* KPI Cards (5 tarjetas limpias sin emojis) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs">
           <div className="flex items-center justify-between text-stone-500 mb-1">
             <span className="text-xs font-semibold">Total Personal</span>
@@ -117,7 +128,7 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
         <div className="bg-white p-4 rounded-xl border border-amber-200 shadow-2xs bg-amber-50/20">
           <div className="flex items-center justify-between text-amber-800 mb-1">
             <span className="text-xs font-bold">Cajeros / Mostrador</span>
-            <span className="text-base">🧑‍💼</span>
+            <Store className="w-4 h-4 text-amber-600" />
           </div>
           <p className="text-2xl font-black text-amber-800">{totalCajeros}</p>
           <span className="text-[11px] text-amber-700 font-medium">Modo Operador</span>
@@ -138,23 +149,16 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
           <p className="text-2xl font-black text-emerald-800">{totalActivos}</p>
-          <span className="text-[11px] text-emerald-700 font-medium">Con acceso habilitado</span>
+          <span className="text-[11px] text-emerald-700 font-medium">Acceso habilitado</span>
         </div>
-      </div>
 
-      {/* Permissions Explanatory Note */}
-      <div className="p-4 rounded-2xl bg-stone-100/80 border border-stone-200 text-xs text-stone-700 flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex items-start gap-2.5">
-          <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-bold text-stone-900">
-              Diferenciación de Seguridad por Rol:
-            </p>
-            <p className="text-stone-600 mt-0.5 leading-relaxed">
-              • <strong>Cajero / Operador:</strong> Consulta stock y registra mermas de mostrador en 3 clics. Está protegido de ver costos de proveedor, compras o reportes de pérdidas monetarias.<br />
-              • <strong>Administrador:</strong> Acceso irrestricto al catálogo, precios, métricas financieras y a esta administración de usuarios.
-            </p>
+        <div className="bg-white p-4 rounded-xl border border-rose-200 shadow-2xs bg-rose-50/20">
+          <div className="flex items-center justify-between text-rose-800 mb-1">
+            <span className="text-xs font-bold">Deshabilitados</span>
+            <UserX className="w-4 h-4 text-rose-600" />
           </div>
+          <p className="text-2xl font-black text-rose-800">{totalDeshabilitados}</p>
+          <span className="text-[11px] text-rose-700 font-medium">Acceso bloqueado</span>
         </div>
       </div>
 
@@ -173,9 +177,9 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
 
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
           <button
-            onClick={() => setRoleFilter('todos')}
+            onClick={() => setFilterMode('todos')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-              roleFilter === 'todos'
+              filterMode === 'todos'
                 ? 'bg-stone-900 text-white'
                 : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
             }`}
@@ -183,24 +187,34 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
             Todos ({usuarios.length})
           </button>
           <button
-            onClick={() => setRoleFilter('cajero')}
+            onClick={() => setFilterMode('cajero')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-              roleFilter === 'cajero'
+              filterMode === 'cajero'
                 ? 'bg-amber-600 text-white'
                 : 'bg-white border border-stone-200 text-amber-800 hover:bg-amber-50'
             }`}
           >
-            🧑‍💼 Cajeros ({totalCajeros})
+            Cajeros ({totalCajeros})
           </button>
           <button
-            onClick={() => setRoleFilter('admin')}
+            onClick={() => setFilterMode('admin')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-              roleFilter === 'admin'
+              filterMode === 'admin'
                 ? 'bg-blue-700 text-white'
                 : 'bg-white border border-stone-200 text-blue-800 hover:bg-blue-50'
             }`}
           >
-            🛡️ Administradores ({totalAdmins})
+            Administradores ({totalAdmins})
+          </button>
+          <button
+            onClick={() => setFilterMode('inactivos')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+              filterMode === 'inactivos'
+                ? 'bg-rose-700 text-white'
+                : 'bg-white border border-stone-200 text-rose-800 hover:bg-rose-50'
+            }`}
+          >
+            Deshabilitados ({totalDeshabilitados})
           </button>
         </div>
       </div>
@@ -209,6 +223,7 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredUsers.map((user) => {
           const userId = user.id ?? user.username ?? '';
+          const nombre = getNombre(user);
           const username = getUsername(user);
           const rol = getRol(user);
           const activo = getActivo(user);
@@ -221,23 +236,31 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
               id={`user-card-${userId}`}
               className={`bg-white rounded-2xl p-5 border transition flex flex-col justify-between shadow-2xs hover:shadow-sm ${
                 !activo
-                  ? 'border-stone-200 bg-stone-50/50 opacity-80'
+                  ? 'border-rose-200 bg-rose-50/20 opacity-85'
                   : rol === 'admin'
                   ? 'border-blue-200 ring-1 ring-blue-50'
                   : 'border-stone-200'
               }`}
             >
               <div>
-                {/* Header Card */}
+                {/* Header Card con iniciales limpias */}
                 <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-3xl w-12 h-12 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center shrink-0">
-                      {getAvatar(user)}
-                    </span>
-                    <div>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={`w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 font-extrabold text-sm tracking-wide ${
+                        !activo
+                          ? 'bg-stone-200 border-stone-300 text-stone-600'
+                          : rol === 'admin'
+                          ? 'bg-blue-50 border-blue-200 text-blue-800'
+                          : 'bg-amber-50 border-amber-200 text-amber-800'
+                      }`}
+                    >
+                      {getInitials(nombre)}
+                    </div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <h3 className="font-bold text-stone-900 text-base leading-tight">
-                          {getNombre(user)}
+                        <h3 className="font-bold text-stone-900 text-base leading-tight truncate">
+                          {nombre}
                         </h3>
                         {isCurrentUser && (
                           <span className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-700 text-[10px] font-bold">
@@ -245,30 +268,30 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
                           </span>
                         )}
                       </div>
-                      <p className="text-xs font-mono text-stone-500 font-semibold">
+                      <p className="text-xs font-mono text-stone-500 font-semibold truncate">
                         @{username}
                       </p>
                     </div>
                   </div>
 
                   {/* Status Indicator */}
-                  <div>
+                  <div className="shrink-0">
                     {activo ? (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
                         Activo
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-stone-200 text-stone-700 border border-stone-300 inline-flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-stone-500" />
-                        Bloqueado
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300 inline-flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
+                        Deshabilitado
                       </span>
                     )}
                   </div>
                 </div>
 
                 {/* Details Badges */}
-                <div className="space-y-2 py-2 border-y border-stone-100 text-xs">
+                <div className="space-y-2 py-2.5 border-y border-stone-100 text-xs">
                   <div className="flex items-center justify-between text-stone-600">
                     <span className="text-stone-400 font-medium">Rol de Acceso:</span>
                     {rol === 'admin' ? (
@@ -287,11 +310,10 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
                     <span className="text-stone-400 font-medium">Turno:</span>
                     <span className="font-semibold text-stone-800 flex items-center gap-1">
                       <Clock className="w-3 h-3 text-stone-400" />
-                      {user.turno || 'Matutino'}
+                      {user.turno || 'Completo'}
                     </span>
                   </div>
 
-                  {/* Password helper */}
                   <div className="flex items-center justify-between text-stone-600">
                     <span className="text-stone-400 font-medium">Contraseña:</span>
                     <div className="flex items-center gap-1 font-mono font-bold text-stone-900">
@@ -329,16 +351,16 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
                 <button
                   onClick={() => onToggleUserStatus(userId)}
                   disabled={isCurrentUser}
-                  className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition cursor-pointer ${
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition cursor-pointer ${
                     isCurrentUser
                       ? 'opacity-40 cursor-not-allowed bg-stone-100 text-stone-400 border-stone-200'
                       : activo
-                      ? 'bg-stone-50 hover:bg-rose-50 text-stone-600 hover:text-rose-700 border-stone-200'
+                      ? 'bg-stone-50 hover:bg-rose-50 text-stone-600 hover:text-rose-700 border-stone-200 hover:border-rose-300'
                       : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
                   }`}
-                  title={isCurrentUser ? 'No puedes bloquear tu propio usuario' : undefined}
+                  title={isCurrentUser ? 'No puedes deshabilitar tu propio usuario' : undefined}
                 >
-                  {activo ? 'Desactivar' : 'Activar Acceso'}
+                  {activo ? 'Deshabilitar' : 'Habilitar Acceso'}
                 </button>
 
                 <div className="flex items-center gap-1.5">

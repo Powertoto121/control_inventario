@@ -251,11 +251,34 @@ export default function App() {
     }
   };
 
-  const handleToggleUserStatus = (userId: number | string) => {
-    setUsuarios((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, activo: !(u.activo ?? true) } : u))
-    );
-    showToast('Estado del usuario actualizado.');
+  const handleToggleUserStatus = async (userId: number | string) => {
+    const targetUser = usuarios.find((u) => String(u.id) === String(userId));
+    if (!targetUser) return;
+
+    const nuevoEstado = !(targetUser.activo ?? true);
+
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ activo: nuevoEstado }),
+      });
+
+      if (!res.ok) throw new Error('Error al cambiar estado en BD');
+
+      await fetchUsuarios();
+      showToast(
+        nuevoEstado
+          ? `Acceso habilitado para ${targetUser.nombre || targetUser.name}.`
+          : `Cuenta deshabilitada para ${targetUser.nombre || targetUser.name}.`
+      );
+    } catch (error) {
+      console.error(error);
+      showToast('No se pudo actualizar el estado del empleado en la base de datos.');
+    }
   };
 
   const handleDeleteUser = async (userId: number | string) => {

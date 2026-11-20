@@ -20,7 +20,7 @@ class UserController extends Controller
                 'password' => $u->remember_token ?? '1234',
                 'rol' => $u->rol === 'administrador' ? 'admin' : $u->rol,
                 'turno' => 'Completo',
-                'activo' => true,
+                'activo' => (bool) ($u->activo ?? true),
                 'fechaAlta' => $u->created_at ? $u->created_at->format('Y-m-d') : '2026-01-01',
             ];
         });
@@ -44,6 +44,7 @@ class UserController extends Controller
             'password' => $request->password,
             'remember_token' => $request->password,
             'rol' => $rolDb,
+            'activo' => $request->has('activo') ? (bool) $request->activo : true,
         ]);
 
         return response()->json([
@@ -56,13 +57,23 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
 
-        $rolDb = ($request->rol === 'admin' || $request->rol === 'administrador') ? 'administrador' : 'cajero';
+        $data = [];
 
-        $data = [
-            'name' => $request->nombre ?? $request->name ?? $user->name,
-            'username' => $request->username ?? $user->username,
-            'rol' => $request->rol ? $rolDb : $user->rol,
-        ];
+        if ($request->has('nombre') || $request->has('name')) {
+            $data['name'] = $request->nombre ?? $request->name;
+        }
+
+        if ($request->has('username')) {
+            $data['username'] = $request->username;
+        }
+
+        if ($request->has('rol')) {
+            $data['rol'] = ($request->rol === 'admin' || $request->rol === 'administrador') ? 'administrador' : 'cajero';
+        }
+
+        if ($request->has('activo')) {
+            $data['activo'] = filter_var($request->activo, FILTER_VALIDATE_BOOLEAN);
+        }
 
         if (!empty($request->password)) {
             $data['password'] = $request->password;

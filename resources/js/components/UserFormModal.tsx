@@ -10,8 +10,6 @@ interface UserFormModalProps {
   existingUsers: Usuario[];
 }
 
-const AVATARES_DISPONIBLES = ['🧑‍💼', '👩‍💼', '👨‍💼', '🙋‍♂️', '🙋‍♀️', '👷', '🧕', '🧔'];
-
 export const UserFormModal: React.FC<UserFormModalProps> = ({
   isOpen,
   onClose,
@@ -23,9 +21,8 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rol, setRol] = useState<string>('cajero');
-  const [turno, setTurno] = useState<'Matutino' | 'Vespertino' | 'Nocturno' | 'Completo' | string>('Matutino');
+  const [turno, setTurno] = useState<'Matutino' | 'Vespertino' | 'Nocturno' | 'Completo' | string>('Completo');
   const [telefono, setTelefono] = useState('');
-  const [avatarEmoji, setAvatarEmoji] = useState('🧑‍💼');
   const [activo, setActivo] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,22 +31,17 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       setNombre(userToEdit.nombre || userToEdit.name || '');
       setUsername(userToEdit.username || '');
       setPassword(userToEdit.password || '123');
-      
-      const roleVal = userToEdit.rol || userToEdit.role || 'cajero';
-      setRol(roleVal);
-      
-      setTurno(userToEdit.turno || 'Matutino');
+      setRol(userToEdit.rol || userToEdit.role || 'cajero');
+      setTurno(userToEdit.turno || 'Completo');
       setTelefono(userToEdit.telefono || '');
-      setAvatarEmoji(userToEdit.avatarEmoji || userToEdit.avatar || '🧑‍💼');
       setActivo(userToEdit.activo ?? true);
     } else {
       setNombre('');
       setUsername('');
-      setPassword('123'); // Contraseña rápida por defecto para mostrador
+      setPassword('123');
       setRol('cajero');
-      setTurno('Matutino');
+      setTurno('Completo');
       setTelefono('');
-      setAvatarEmoji('🧑‍💼');
       setActivo(true);
     }
     setError(null);
@@ -80,7 +72,6 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       return;
     }
 
-    // Verificar si el username ya está en uso por otro usuario
     const yaExiste = existingUsers.some(
       (u) =>
         (u.username || '').toLowerCase() === cleanUsername &&
@@ -102,8 +93,6 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       role: rol,
       turno,
       telefono: telefono.trim() || undefined,
-      avatarEmoji,
-      avatar: avatarEmoji,
       activo,
       email: `${cleanUsername}@tienda.com`,
     });
@@ -160,29 +149,6 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Avatar Selector */}
-          <div>
-            <label className="block text-xs font-bold text-stone-700 mb-1.5">
-              Icono de Perfil
-            </label>
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              {AVATARES_DISPONIBLES.map((av) => (
-                <button
-                  type="button"
-                  key={av}
-                  onClick={() => setAvatarEmoji(av)}
-                  className={`w-10 h-10 rounded-xl text-xl flex items-center justify-center border transition cursor-pointer ${
-                    avatarEmoji === av
-                      ? 'bg-amber-100 border-amber-500 ring-2 ring-amber-400'
-                      : 'bg-stone-50 border-stone-200 hover:bg-stone-100'
-                  }`}
-                >
-                  {av}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Nombre Completo */}
           <div>
             <label className="block text-xs font-bold text-stone-700 mb-1">
@@ -268,11 +234,9 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                   className="mt-1 text-amber-600 focus:ring-amber-500"
                 />
                 <div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs font-bold text-stone-900">Operador / Cajero</span>
-                  </div>
+                  <span className="text-xs font-bold text-stone-900 block">Operador / Cajero</span>
                   <p className="text-[11px] text-stone-500 leading-tight mt-0.5">
-                    Solo búsqueda de stock y merma express de mostrador. Sin acceso a dinero ni costos.
+                    Consulta de stock y merma express de mostrador. Sin acceso a dinero ni costos.
                   </p>
                 </div>
               </label>
@@ -306,29 +270,29 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
             </div>
           </div>
 
-          {/* Turno y Teléfono */}
+          {/* Turno (opcional) y Teléfono */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-stone-400" />
-                <span>Turno de Trabajo</span>
+                <span>Turno (Opcional)</span>
               </label>
               <select
                 value={turno}
                 onChange={(e) => setTurno(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-xs font-semibold bg-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
               >
+                <option value="Completo">Turno Completo / General</option>
                 <option value="Matutino">Matutino (Mañanas)</option>
                 <option value="Vespertino">Vespertino (Tardes)</option>
                 <option value="Nocturno">Nocturno</option>
-                <option value="Completo">Turno Completo</option>
               </select>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center gap-1">
                 <Phone className="w-3.5 h-3.5 text-stone-400" />
-                <span>Teléfono de Contacto (Opcional)</span>
+                <span>Teléfono (Opcional)</span>
               </label>
               <input
                 type="text"
@@ -340,25 +304,19 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
             </div>
           </div>
 
-          {/* Estado Activo / Inactivo */}
+          {/* Estado Activo / Deshabilitado */}
           <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
             <div>
               <span className="text-xs font-bold text-stone-800">Estado de la cuenta</span>
               <p className="text-[11px] text-stone-500">
-                {activo ? 'Permitir inicio de sesión en mostrador' : 'Bloquear acceso al sistema'}
+                {activo ? 'Permitir inicio de sesión en mostrador' : 'Cuenta deshabilitada (acceso bloqueado)'}
               </p>
             </div>
             <button
               type="button"
               onClick={() => setActivo(!activo)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                activo
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                  : 'bg-stone-200 text-stone-600 border border-stone-300'
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${activo ? 'bg-emerald-600' : 'bg-stone-400'}`} />
-              <span>{activo ? 'Activo' : 'Inactivo (Bloqueado)'}</span>
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${ activo ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300' }`} > <span className={`w-2 h-2 rounded-full ${activo ? 'bg-emerald-600' : 'bg-rose-600'}`} />
+              <span>{activo ? 'Activo' : 'Deshabilitado'}</span>
             </button>
           </div>
 
