@@ -35,14 +35,22 @@ class ProductoController extends Controller
 
     public function store(Request $request)
     {
+        $barcode = trim($request->barcode ?? $request->codigoBarras ?? $request->codigo_barras ?? '');
+        if ($barcode !== '' && Producto::where('barcode', $barcode)->exists()) {
+            return response()->json([
+                'message' => "El código de barras {$barcode} ya está registrado en otro producto."
+            ], 422);
+        }
+
         $categoriaId = $this->resolverCategoriaId($request, 1);
         $costo = $request->costoCompra ?? $request->precio_costo ?? 0;
         $venta = $request->precioVenta ?? $request->precio_venta ?? 0;
+        $barcodeFinal = $barcode !== '' ? $barcode : 'SIN-CODIGO';
 
         $producto = Producto::create([
             'nombre' => $request->nombre,
-            'barcode' => $request->barcode ?? $request->codigoBarras ?? $request->codigo_barras ?? 'SIN-CODIGO',
-            'sku' => $request->sku ?? $request->barcode ?? null,
+            'barcode' => $barcodeFinal,
+            'sku' => $request->sku ?? $barcodeFinal,
             'categoria_id' => $categoriaId,
             'unidad_medida' => $request->unidad_medida ?? $request->unidadMedida ?? 'pza',
             'descripcion' => $request->descripcion ?? '',
@@ -74,10 +82,9 @@ class ProductoController extends Controller
         $costo = $request->costoCompra ?? $request->precio_costo ?? $producto->precio_costo;
         $venta = $request->precioVenta ?? $request->precio_venta ?? $producto->precio_venta;
 
+        // El código de barras (barcode / sku) no se modifica al editar
         $producto->update([
             'nombre' => $request->nombre ?? $producto->nombre,
-            'barcode' => $request->barcode ?? $request->codigoBarras ?? $request->codigo_barras ?? $producto->barcode,
-            'sku' => $request->sku ?? $request->barcode ?? $producto->sku,
             'categoria_id' => $categoriaId,
             'unidad_medida' => $request->unidad_medida ?? $request->unidadMedida ?? $producto->unidad_medida,
             'descripcion' => $request->descripcion ?? $producto->descripcion,

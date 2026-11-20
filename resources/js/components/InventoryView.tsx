@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Producto, Usuario } from '../types';
 import { getFifoStatus } from '../utils/fifoUtils';
-import { getCategoryIcon } from '../utils/categoryUtils';
+import { BarcodeScannerModal } from './BarcodeScannerModal';
 import {
   Package,
   Search,
@@ -13,6 +13,8 @@ import {
   CheckCircle2,
   CalendarX2,
   Barcode,
+  ScanBarcode,
+  X,
 } from 'lucide-react';
 
 interface InventoryViewProps {
@@ -34,12 +36,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const isCajero = (currentUser?.rol || currentUser?.role) === 'cajero';
 
-  // Extractores seguros adaptados a la base de datos PostgreSQL y relaciones Eloquent (Blindados contra nulos)
   const getNombre = (p: Producto) => p.nombre ?? 'Sin nombre';
-  
+
   const getCategoria = (p: Producto): string => {
     if (typeof p.categoria === 'object' && p.categoria !== null) {
       return (p.categoria as any).nombre ?? 'General';
@@ -48,7 +50,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   };
 
   const getCodigo = (p: Producto) => p.barcode ?? p.codigoBarras ?? p.sku ?? String(p.id ?? '');
-  
+
   const getStock = (p: Producto): number => {
     if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
       return p.inventarios.reduce((acc, inv) => acc + Number(inv.stock ?? 0), 0);
@@ -57,7 +59,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   };
 
   const getMinStock = (p: Producto): number => Number(p.min_stock ?? p.stockMinimo ?? p.minStock ?? 1);
-  
+
   const getCosto = (p: Producto): number => {
     if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
       return Number(p.inventarios[0]?.precio_costo ?? 0);
@@ -72,16 +74,15 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     return Number(p.precioVenta ?? p.precio ?? 0);
   };
 
-  const getUnidad = (p: Producto) => p.unidadMedida ?? 'pza';
+  const getUnidad = (p: Producto) => p.unidad_medida ?? p.unidadMedida ?? 'pza';
 
-  // Obtener categorías únicas garantizando que sean strings
   const categorias: string[] = [
     'Todas',
-    ...Array.from(new Set(productos.map((p) => getCategoria(p))))
+    ...Array.from(new Set(productos.map((p) => getCategoria(p)))),
   ];
 
   const filtered = productos.filter((p) => {
-    const q = search.toLowerCase();
+    const q = search.toLowerCase().trim();
     const matchSearch =
       getNombre(p).toLowerCase().includes(q) ||
       getCodigo(p).toLowerCase().includes(q);
@@ -89,19 +90,47 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     return matchSearch && matchCat;
   });
 
+  const handleBarcodeDetected = (code: string) => {
+    setSelectedCategory('Todas');
+    setSearch(code);
+  };
+
   return (
     <div className="space-y-6">
       {/* Search and Filters Bar */}
       <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-3">
-        <div className="relative w-full md:w-96">
-          <Search className="w-4 h-4 absolute left-3.5 top-3 text-stone-400" />
+        <div className="relative w-full md:w-96 flex items-center">
+          <Search className="w-4 h-4 absolute left-3.5 text-stone-400 pointer-events-none" />
           <input
             type="text"
             placeholder="Buscar por nombre o código de barras..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white"
+            className="w-full pl-9 pr-20 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white"
           />
+
+          <div className="absolute right-1.5 flex items-center gap-1">
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="p-1 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-200/70 cursor-pointer"
+                title="Limpiar búsqueda"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsScannerOpen(true)}
+              className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer border border-amber-300/70"
+              title="Escanear código de barras con cámara"
+            >
+              <ScanBarcode className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Escanear</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 scrollbar-none">
@@ -141,7 +170,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           const isAgotado = stock === 0;
           const isBajo = stock <= minStock && !isAgotado;
           const fifo = prod.fechaCaducidadProxima ? getFifoStatus(prod.fechaCaducidadProxima) : null;
-          const categoryIcon = getCategoryIcon(categoria);
 
           return (
             <div
@@ -285,6 +313,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Modal Escáner de Cámara */}
+      <BarcodeScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanSuccess={handleBarcodeDetected}
+      />
     </div>
   );
 };

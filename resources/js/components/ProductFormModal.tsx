@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Producto } from '../types';
 import { getCategoryIcon } from '../utils/categoryUtils';
-import { X, Check, Barcode, Calendar } from 'lucide-react';
+import { X, Check, Barcode, Calendar, Lock } from 'lucide-react';
 
 interface ProductFormModalProps {
   isOpen: boolean;
@@ -25,6 +25,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [stockActual, setStockActual] = useState<number>(10);
   const [stockMinimo, setStockMinimo] = useState<number>(5);
   const [fechaCaducidad, setFechaCaducidad] = useState<string>('');
+
+  const isEditing = Boolean(productToEdit);
 
   useEffect(() => {
     if (productToEdit) {
@@ -92,7 +94,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     e.preventDefault();
     if (!nombre.trim()) return;
 
-    const barcodeFinal = codigoBarras.trim() || Math.floor(100000000000 + Math.random() * 900000000000).toString();
+    const barcodeOriginal = productToEdit?.barcode || productToEdit?.codigoBarras || productToEdit?.sku || '';
+    const barcodeFinal = isEditing
+      ? barcodeOriginal
+      : (codigoBarras.trim() || Math.floor(100000000000 + Math.random() * 900000000000).toString());
+
     const emojiStr = typeof categoryIconData === 'string'
       ? categoryIconData
       : (typeof (categoryIconData as any)?.icon === 'string' ? (categoryIconData as any).icon : '📦');
@@ -127,6 +133,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   };
 
   const generateBarcode = () => {
+    if (isEditing) return;
     setCodigoBarras(Math.floor(100000000000 + Math.random() * 900000000000).toString());
   };
 
@@ -141,7 +148,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
             </span>
             <div>
               <h3 className="text-base font-bold text-stone-900">
-                {productToEdit ? 'Editar Producto' : 'Dar de Alta Nuevo Producto'}
+                {isEditing ? 'Editar Producto' : 'Dar de Alta Nuevo Producto'}
               </h3>
               <p className="text-[11px] text-stone-500">
                 Categoría seleccionada: {categoria}
@@ -174,29 +181,52 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
             />
           </div>
 
-          {/* Código de Barras */}
+          {/* Código de Barras (Bloqueado al editar) */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-semibold text-stone-700">
-                Código de Barras
+              <label className="text-xs font-semibold text-stone-700 flex items-center gap-1.5">
+                <span>Código de Barras</span>
+                {isEditing && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-stone-200/80 text-stone-600 text-[10px] font-bold">
+                    <Lock className="w-2.5 h-2.5" />
+                    No editable
+                  </span>
+                )}
               </label>
-              <button
-                type="button"
-                onClick={generateBarcode}
-                className="text-[11px] text-amber-700 hover:text-amber-800 font-semibold flex items-center gap-1 cursor-pointer"
-              >
-                <Barcode className="w-3.5 h-3.5" />
-                <span>Generar automático</span>
-              </button>
+
+              {!isEditing && (
+                <button
+                  type="button"
+                  onClick={generateBarcode}
+                  className="text-[11px] text-amber-700 hover:text-amber-800 font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <Barcode className="w-3.5 h-3.5" />
+                  <span>Generar automático</span>
+                </button>
+              )}
             </div>
-            <input
-              type="text"
-              id="product-input-barcode"
-              placeholder="750102051234"
-              value={codigoBarras}
-              onChange={(e) => setCodigoBarras(e.target.value)}
-              className="w-full px-3.5 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
-            />
+
+            <div className="relative">
+              <input
+                type="text"
+                id="product-input-barcode"
+                placeholder="750102051234"
+                value={codigoBarras}
+                readOnly={isEditing}
+                disabled={isEditing}
+                onChange={(e) => {
+                  if (!isEditing) setCodigoBarras(e.target.value);
+                }}
+                className={`w-full px-3.5 py-2 border rounded-xl text-xs font-mono ${
+                  isEditing
+                    ? 'bg-stone-100 border-stone-200 text-stone-500 cursor-not-allowed select-all pr-9'
+                    : 'bg-stone-50 border-stone-300 text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-500'
+                }`}
+              />
+              {isEditing && (
+                <Lock className="w-3.5 h-3.5 text-stone-400 absolute right-3 top-2.5" />
+              )}
+            </div>
           </div>
 
           {/* Categoría y Unidad de Medida */}
@@ -327,7 +357,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               className="w-full py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-sm font-bold shadow-md transition flex items-center justify-center gap-2 cursor-pointer active:scale-98"
             >
               <Check className="w-4 h-4" />
-              <span>{productToEdit ? 'Guardar Cambios' : 'Registrar Producto en Inventario'}</span>
+              <span>{isEditing ? 'Guardar Cambios' : 'Registrar Producto en Inventario'}</span>
             </button>
           </div>
         </form>
