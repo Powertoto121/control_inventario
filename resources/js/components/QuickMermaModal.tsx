@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Producto, MotivoMermaId, Usuario } from '../types';
 import { getFifoStatus } from '../utils/fifoUtils';
 import { getCategoryIcon } from '../utils/categoryUtils';
-import { X, CalendarX2, PackageX, AlertTriangle, HelpCircle, Check, ArrowRight } from 'lucide-react';
+import { X, CalendarX2, PackageX, HelpCircle, Check, ArrowRight, Camera, Trash2 } from 'lucide-react';
 
 interface QuickMermaModalProps {
   isOpen: boolean;
@@ -16,6 +16,7 @@ interface QuickMermaModalProps {
     motivoId: MotivoMermaId;
     notas: string;
     responsable: string;
+    imagenFile?: File | null;
   }) => void;
 }
 
@@ -40,8 +41,12 @@ export const QuickMermaModal: React.FC<QuickMermaModalProps> = ({
   );
   const [paso, setPaso] = useState<1 | 2>(initialProducto ? 2 : 1);
 
+  const [imagenFile, setImagenFile] = useState<File | null>(null);
+  const [imagenPreview, setImagenPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const getNombre = (p: Producto) => p.nombre ?? 'Sin nombre';
-  
+
   const getCategoria = (p: Producto): string => {
     if (typeof p.categoria === 'object' && p.categoria !== null) {
       return (p.categoria as any).nombre ?? 'General';
@@ -50,7 +55,7 @@ export const QuickMermaModal: React.FC<QuickMermaModalProps> = ({
   };
 
   const getCodigo = (p: Producto) => p.barcode ?? p.codigoBarras ?? p.sku ?? String(p.id ?? '');
-  
+
   const getStock = (p: Producto): number => {
     if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
       return p.inventarios.reduce((acc, inv) => acc + Number(inv.stock ?? 0), 0);
@@ -74,7 +79,11 @@ export const QuickMermaModal: React.FC<QuickMermaModalProps> = ({
     if (React.isValidElement(icon)) {
       return icon;
     }
-    return <span>{String(icon ?? '📦')}</span>;
+    if (icon && typeof icon === 'object') {
+      const inner = icon.icon || icon.emoji;
+      if (typeof inner === 'string') return <span>{inner}</span>;
+    }
+    return <span>{typeof icon === 'string' ? icon : '📦'}</span>;
   };
 
   useEffect(() => {
@@ -94,6 +103,8 @@ export const QuickMermaModal: React.FC<QuickMermaModalProps> = ({
     setCantidad(1);
     setSelectedMotivo('caducidad');
     setNotas('');
+    setImagenFile(null);
+    setImagenPreview(null);
   }, [initialProducto, isOpen]);
 
   if (!isOpen) return null;
@@ -122,6 +133,19 @@ export const QuickMermaModal: React.FC<QuickMermaModalProps> = ({
     setPaso(2);
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImagenFile(file);
+    setImagenPreview(URL.createObjectURL(file));
+  };
+
+  const clearImage = () => {
+    setImagenFile(null);
+    setImagenPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleConfirm = () => {
     if (!currentProducto || cantidad <= 0) return;
 
@@ -131,15 +155,15 @@ export const QuickMermaModal: React.FC<QuickMermaModalProps> = ({
       motivoId: selectedMotivo,
       notas,
       responsable,
+      imagenFile,
     });
     onClose();
   };
 
   const motivosDisponibles: Array<{ id: MotivoMermaId; label: string; desc: string; icon: React.ReactNode }> = [
-    { id: 'caducidad', label: 'Fecha Vencida / Caducidad', desc: 'Llegó a su fecha límite de consumo', icon: <CalendarX2 className="w-5 h-5 text-rose-600" /> },
-    { id: 'empaque_danado', label: 'Empaque Dañado / Roto', desc: 'Bolsa rota, lata abollada o empaque abierto', icon: <PackageX className="w-5 h-5 text-amber-600" /> },
-    { id: 'mal_estado', label: 'Descomposición / Mal Estado', desc: 'Fruta/verdura madura o producto alterado', icon: <AlertTriangle className="w-5 h-5 text-orange-600" /> },
-    { id: 'otro', label: 'Robo / Ajuste / Otro', desc: 'Diferencia de inventario o causa diversa', icon: <HelpCircle className="w-5 h-5 text-stone-600" /> },
+    { id: 'caducidad', label: 'Fecha Vencida / Caducidad', desc: 'Vencido, agrio o en mal estado', icon: <CalendarX2 className="w-5 h-5 text-rose-600" /> },
+    { id: 'empaque_danado', label: 'Empaque Dañado / Roto', desc: 'Bolsa rota, lata abollada o producto quebrado', icon: <PackageX className="w-5 h-5 text-amber-600" /> },
+    { id: 'otro', label: 'Robo / Ajuste / Otro', desc: 'Diferencia de inventario o extravío', icon: <HelpCircle className="w-5 h-5 text-stone-600" /> },
   ];
 
   return (
@@ -361,13 +385,13 @@ export const QuickMermaModal: React.FC<QuickMermaModalProps> = ({
                 </div>
               </div>
 
-              {/* Selector de Motivos Estático */}
+              {/* Selector de 3 Motivos */}
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-stone-800">
                   ¿Por qué motivo se retira del inventario?
                 </label>
 
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   {motivosDisponibles.map((m) => {
                     const isSelected = selectedMotivo === m.id;
                     return (
@@ -390,13 +414,61 @@ export const QuickMermaModal: React.FC<QuickMermaModalProps> = ({
                           )}
                         </div>
                         <div>
-                          <p className="font-bold text-sm text-stone-900">{m.label}</p>
-                          <p className="text-[11px] text-stone-500 leading-tight">{m.desc}</p>
+                          <p className="font-bold text-xs text-stone-900">{m.label}</p>
+                          <p className="text-[11px] text-stone-500 leading-tight mt-0.5">{m.desc}</p>
                         </div>
                       </button>
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Evidencia Fotográfica */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-stone-700 block">
+                  Evidencia fotográfica (opcional):
+                </label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+                {!imagenPreview ? (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full py-3 px-4 rounded-xl border-2 border-dashed border-stone-300 hover:border-amber-500 bg-stone-50 hover:bg-amber-50/40 text-stone-600 hover:text-amber-800 transition flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer"
+                  >
+                    <Camera className="w-4 h-4 text-amber-600" />
+                    <span>Tomar foto o subir imagen del producto dañado</span>
+                  </button>
+                ) : (
+                  <div className="relative rounded-xl border border-stone-200 overflow-hidden bg-stone-100 flex items-center gap-3 p-2">
+                    <img
+                      src={imagenPreview}
+                      alt="Evidencia de merma"
+                      className="w-16 h-16 object-cover rounded-lg border border-stone-300 shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-stone-800 truncate">
+                        {imagenFile?.name || 'Foto adjunta'}
+                      </p>
+                      <p className="text-[11px] text-emerald-700 font-medium">
+                        Lista para guardar con el reporte
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearImage}
+                      className="p-2 rounded-lg bg-white hover:bg-rose-50 text-stone-500 hover:text-rose-600 border border-stone-200 cursor-pointer"
+                      title="Quitar foto"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {!isCajero ? (

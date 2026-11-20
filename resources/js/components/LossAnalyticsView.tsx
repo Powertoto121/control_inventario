@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { RegistroMerma, Producto } from '../types';
-import { MOTIVOS_MERMA } from '../data/initialData';
-import { Download, ShieldAlert } from 'lucide-react';
+import { Download, ShieldAlert, Image as ImageIcon, X } from 'lucide-react';
 
 interface LossAnalyticsViewProps {
   mermas: RegistroMerma[];
@@ -9,18 +8,57 @@ interface LossAnalyticsViewProps {
   onDeleteMerma?: (id: string) => void;
 }
 
+const CATEGORIAS_MOTIVO = [
+  {
+    key: 'caducidad',
+    nombre: 'Fecha Vencida / Caducidad',
+    descripcion: 'Cumplió su fecha límite o se encontró en mal estado',
+    match: (texto: string) => {
+      const t = texto.toLowerCase();
+      return t.includes('caduc') || t.includes('vencid') || t.includes('mal estado') || t.includes('descompos');
+    },
+  },
+  {
+    key: 'empaque_danado',
+    nombre: 'Empaque Dañado / Roto',
+    descripcion: 'Bolsa rota, lata abollada o producto quebrado en manejo',
+    match: (texto: string) => {
+      const t = texto.toLowerCase();
+      return t.includes('dañad') || t.includes('danad') || t.includes('roto') || t.includes('empaque');
+    },
+  },
+  {
+    key: 'otro',
+    nombre: 'Robo / Ajuste / Otro',
+    descripcion: 'Diferencia de inventario, extravío o merma general',
+    match: (texto: string) => {
+      const t = texto.toLowerCase();
+      return (
+        !t.includes('caduc') &&
+        !t.includes('vencid') &&
+        !t.includes('mal estado') &&
+        !t.includes('descompos') &&
+        !t.includes('dañad') &&
+        !t.includes('danad') &&
+        !t.includes('roto') &&
+        !t.includes('empaque')
+      );
+    },
+  },
+];
+
 export const LossAnalyticsView: React.FC<LossAnalyticsViewProps> = ({
   mermas = [],
   productos = [],
   onDeleteMerma,
 }) => {
   const [filtroMotivo, setFiltroMotivo] = useState<string>('todos');
+  const [selectedEvidenceUrl, setSelectedEvidenceUrl] = useState<string | null>(null);
 
-  // Helpers de extracción segura adaptados a Laravel/PostgreSQL
   const getCostoTotal = (m: RegistroMerma): number => Number(m.costoTotalPerdida ?? m.costoPerdida ?? 0);
   const getCantidad = (m: RegistroMerma): number => Number(m.cantidad ?? 0);
   const getProductoId = (m: RegistroMerma): string => String(m.productoId ?? m.inventario_id ?? '');
-  
+
   const getProductoNombre = (m: RegistroMerma): string => {
     if (typeof (m as any).inventario?.producto === 'object' && (m as any).inventario?.producto !== null) {
       return (m as any).inventario.producto.nombre ?? 'Producto General';
@@ -33,13 +71,6 @@ export const LossAnalyticsView: React.FC<LossAnalyticsViewProps> = ({
       return (m as any).inventario.producto.categoria.nombre ?? 'General';
     }
     return m.categoria ?? 'General';
-  };
-
-  const getMotivoId = (m: RegistroMerma): string => {
-    if (typeof (m as any).catalogo_merma === 'object' && (m as any).catalogo_merma !== null) {
-      return String((m as any).catalogo_merma.id ?? '');
-    }
-    return String(m.motivoId ?? m.catalogo_merma_id ?? '');
   };
 
   const getMotivoNombre = (m: RegistroMerma): string => {
@@ -63,27 +94,28 @@ export const LossAnalyticsView: React.FC<LossAnalyticsViewProps> = ({
     return Number(m.costoUnitario ?? 0);
   };
 
-  // Compute total financial loss
+  const getEvidenciaUrl = (m: RegistroMerma): string | null => {
+    const raw = (m as any).imagenEvidencia ?? (m as any).imagen_evidencia ?? null;
+    if (!raw || typeof raw !== 'string') return null;
+    if (raw.startsWith('http') || raw.startsWith('/')) return raw;
+    return `/storage/${raw}`;
+  };
+
   const totalPerdidaDinero = mermas.reduce((acc, m) => acc + getCostoTotal(m), 0);
   const totalUnidadesMermadas = mermas.reduce((acc, m) => acc + getCantidad(m), 0);
 
-  // Losses by motive
-  const perdidaPorMotivo = MOTIVOS_MERMA.map((motivo) => {
-    const motivoIdStr = String(motivo.id);
-    const registros = mermas.filter((m) => getMotivoId(m) === motivoIdStr || getMotivoNombre(m).toLowerCase().includes(motivo.nombre?.toLowerCase() || ''));
+  const perdidaPorMotivo = CATEGORIAS_MOTIVO.map((cat) => {
+    const registros = mermas.filter((m) => cat.match(getMotivoNombre(m)));
     const totalMonto = registros.reduce((acc, m) => acc + getCostoTotal(m), 0);
     const porcentaje = totalPerdidaDinero > 0 ? (totalMonto / totalPerdidaDinero) * 100 : 0;
     return {
-      ...motivo,
-      nombre: motivo.nombre || motivo.label || 'Motivo',
-      descripcion: motivo.description || motivo.descripcion || '',
+      ...cat,
       totalMonto,
       totalRegistros: registros.length,
       porcentaje,
     };
   });
 
-  // Losses by product top list
   const mermasPorProductoMap = new Map<string, { nombre: string; total: number; unidades: number; categoria: string }>();
   mermas.forEach((m) => {
     const prodId = getProductoId(m);
@@ -103,16 +135,20 @@ export const LossAnalyticsView: React.FC<LossAnalyticsViewProps> = ({
     .sort((a, b) => b.total - a.total)
     .slice(0, 5);
 
-  const filteredMermas = filtroMotivo === 'todos'
-    ? mermas
-    : mermas.filter((m) => getMotivoId(m) === filtroMotivo || getMotivoNombre(m).toLowerCase().includes(filtroMotivo.toLowerCase()));
+  const filteredMermas =
+    filtroMotivo === 'todos'
+      ? mermas
+      : mermas.filter((m) => {
+          const cat = CATEGORIAS_MOTIVO.find((c) => c.key === filtroMotivo);
+          return cat ? cat.match(getMotivoNombre(m)) : true;
+        });
 
   const handleExportCSV = () => {
-    const headers = 'ID,Fecha,Hora,Producto,Categoría,Cantidad,Unidad,Motivo,Costo_Unitario,Perdida_Total,Responsable,Notas\n';
+    const headers = 'ID,Fecha,Hora,Producto,Categoría,Cantidad,Unidad,Motivo,Costo_Unitario,Perdida_Total,Responsable,Notas,Evidencia\n';
     const rows = mermas
       .map(
         (m) =>
-          `"${m.id || ''}","${m.fecha || ''}","${m.hora || ''}","${getProductoNombre(m)}","${getCategoria(m)}",${getCantidad(m)},"${getUnidad(m)}","${getMotivoNombre(m)}",${getCostoUnitario(m)},${getCostoTotal(m)},"${m.responsable || ''}","${m.notas || m.observaciones || ''}"`
+          `"${m.id || ''}","${m.fecha || ''}","${m.hora || ''}","${getProductoNombre(m)}","${getCategoria(m)}",${getCantidad(m)},"${getUnidad(m)}","${getMotivoNombre(m)}",${getCostoUnitario(m)},${getCostoTotal(m)},"${m.responsable || ''}","${m.notas || m.observaciones || ''}","${getEvidenciaUrl(m) || 'Sin foto'}"`
       )
       .join('\n');
 
@@ -170,7 +206,7 @@ export const LossAnalyticsView: React.FC<LossAnalyticsViewProps> = ({
             </div>
           </div>
           <div className="text-lg font-extrabold text-stone-900 truncate">
-            {causaPrincipal?.nombre || 'Sin registros'}
+            {causaPrincipal && causaPrincipal.totalMonto > 0 ? causaPrincipal.nombre : 'Sin registros'}
           </div>
           <p className="text-[11px] text-stone-500 mt-1">
             Representa el {causaPrincipal ? causaPrincipal.porcentaje.toFixed(0) : 0}% del dinero perdido
@@ -195,7 +231,6 @@ export const LossAnalyticsView: React.FC<LossAnalyticsViewProps> = ({
 
       {/* Breakdown Charts & Top Waste */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Motivos de Merma Breakdown */}
         <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-stone-900">
@@ -206,12 +241,12 @@ export const LossAnalyticsView: React.FC<LossAnalyticsViewProps> = ({
             </span>
           </div>
 
-          <div className="space-y-3.5">
+          <div className="space-y-4">
             {perdidaPorMotivo.map((motivo) => (
-              <div key={motivo.id} className="space-y-1.5">
+              <div key={motivo.key} className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-stone-800">
-                    {motivo.nombre} ({motivo.totalRegistros} casos)
+                    {motivo.nombre} ({motivo.totalRegistros} {motivo.totalRegistros === 1 ? 'caso' : 'casos'})
                   </span>
                   <div className="text-right font-medium">
                     <span className="text-stone-900 font-bold">${motivo.totalMonto.toFixed(2)} MXN</span>
@@ -219,23 +254,21 @@ export const LossAnalyticsView: React.FC<LossAnalyticsViewProps> = ({
                   </div>
                 </div>
 
-                {/* Progress bar */}
                 <div className="w-full h-3 bg-stone-100 rounded-full overflow-hidden">
                   <div
-                    className="h-full rounded-full transition-all duration-500 bg-amber-500"
-                    style={{ width: `${Math.max(motivo.porcentaje, 4)}%` }}
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      motivo.porcentaje > 0 ? 'bg-amber-500' : 'bg-stone-200'
+                    }`}
+                    style={{ width: `${motivo.porcentaje > 0 ? Math.max(motivo.porcentaje, 4) : 0}%` }}
                   />
                 </div>
-                {motivo.descripcion && (
-                  <p className="text-[11px] text-stone-500">
-                    {motivo.descripcion}
-                  </p>
-                )}
+                <p className="text-[11px] text-stone-500">
+                  {motivo.descripcion}
+                </p>
               </div>
             ))}
           </div>
 
-          {/* Operational recommendations */}
           <div className="mt-4 p-4 rounded-xl bg-amber-50/70 border border-amber-200">
             <h4 className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
               <ShieldAlert className="w-4 h-4" />
@@ -310,8 +343,9 @@ export const LossAnalyticsView: React.FC<LossAnalyticsViewProps> = ({
               className="px-3 py-1.5 bg-stone-50 border border-stone-300 rounded-xl text-xs font-medium text-stone-700 focus:outline-none"
             >
               <option value="todos">Todos los motivos</option>
-              <option value="Caducado">Caducidad</option>
-              <option value="Dañado">Roto/Dañado</option>
+              <option value="caducidad">Fecha Vencida / Caducidad</option>
+              <option value="empaque_danado">Empaque Dañado / Roto</option>
+              <option value="otro">Robo / Ajuste / Otro</option>
             </select>
 
             <button
@@ -335,41 +369,67 @@ export const LossAnalyticsView: React.FC<LossAnalyticsViewProps> = ({
                 <th className="px-5 py-3 text-right">Pérdida ($)</th>
                 <th className="px-5 py-3">Responsable</th>
                 <th className="px-5 py-3">Notas</th>
+                <th className="px-5 py-3 text-center">Evidencia</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {filteredMermas.map((merma, idx) => (
-                <tr key={merma.id || idx} className="hover:bg-stone-50/70 transition">
-                  <td className="px-5 py-3.5 whitespace-nowrap">
-                    <span className="font-semibold text-stone-800 block">{merma.fecha || (merma.created_at ? new Date(merma.created_at).toLocaleDateString() : '—')}</span>
-                    <span className="text-stone-400 text-[10px]">{merma.hora || ''}</span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className="font-bold text-stone-900 block">{getProductoNombre(merma)}</span>
-                    <span className="text-stone-400 text-[10px]">{getCategoria(merma)}</span>
-                  </td>
-                  <td className="px-5 py-3.5 font-semibold text-stone-800 whitespace-nowrap">
-                    {getCantidad(merma)} {getUnidad(merma)}
-                  </td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-900">
-                      {getMotivoNombre(merma)}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 text-right font-bold text-red-600 whitespace-nowrap">
-                    -${getCostoTotal(merma).toFixed(2)} MXN
-                  </td>
-                  <td className="px-5 py-3.5 text-stone-600 whitespace-nowrap">
-                    {merma.responsable || (merma as any).user?.name || '—'}
-                  </td>
-                  <td className="px-5 py-3.5 text-stone-500 italic max-w-xs truncate">
-                    {merma.notas || merma.observaciones || '—'}
-                  </td>
-                </tr>
-              ))}
+              {filteredMermas.map((merma, idx) => {
+                const evidenciaUrl = getEvidenciaUrl(merma);
+                return (
+                  <tr key={merma.id || idx} className="hover:bg-stone-50/70 transition">
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <span className="font-semibold text-stone-800 block">{merma.fecha || (merma.created_at ? new Date(merma.created_at).toLocaleDateString() : '—')}</span>
+                      <span className="text-stone-400 text-[10px]">{merma.hora || ''}</span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className="font-bold text-stone-900 block">{getProductoNombre(merma)}</span>
+                      <span className="text-stone-400 text-[10px]">{getCategoria(merma)}</span>
+                    </td>
+                    <td className="px-5 py-3.5 font-semibold text-stone-800 whitespace-nowrap">
+                      {getCantidad(merma)} {getUnidad(merma)}
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-900">
+                        {getMotivoNombre(merma)}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-bold text-red-600 whitespace-nowrap">
+                      -${getCostoTotal(merma).toFixed(2)} MXN
+                    </td>
+                    <td className="px-5 py-3.5 text-stone-600 whitespace-nowrap">
+                      {merma.responsable || (merma as any).user?.name || '—'}
+                    </td>
+                    <td className="px-5 py-3.5 text-stone-500 italic max-w-xs truncate">
+                      {merma.notas || merma.observaciones || '—'}
+                    </td>
+                    <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                      {evidenciaUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedEvidenceUrl(evidenciaUrl)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-semibold text-[11px] transition cursor-pointer"
+                          title="Ver fotografía de evidencia"
+                        >
+                          <img
+                            src={evidenciaUrl}
+                            alt="Evidencia"
+                            className="w-5 h-5 rounded object-cover border border-amber-300"
+                          />
+                          <span>Ver foto</span>
+                        </button>
+                      ) : (
+                        <span className="text-stone-400 text-[11px] inline-flex items-center gap-1">
+                          <ImageIcon className="w-3.5 h-3.5 opacity-50" />
+                          <span>Sin foto</span>
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
               {filteredMermas.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-stone-400">
+                  <td colSpan={8} className="px-5 py-8 text-center text-stone-400">
                     No hay registros de mermas que coincidan con el filtro.
                   </td>
                 </tr>
@@ -378,6 +438,37 @@ export const LossAnalyticsView: React.FC<LossAnalyticsViewProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Modal Visor de Evidencia Fotográfica */}
+      {selectedEvidenceUrl && (
+        <div
+          onClick={() => setSelectedEvidenceUrl(null)}
+          className="fixed inset-0 z-50 bg-stone-900/80 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl border border-stone-200"
+          >
+            <div className="px-5 py-3.5 border-b border-stone-200 flex items-center justify-between bg-stone-50">
+              <h4 className="text-sm font-bold text-stone-900">Evidencia Fotográfica de Merma</h4>
+              <button
+                type="button"
+                onClick={() => setSelectedEvidenceUrl(null)}
+                className="w-8 h-8 rounded-full bg-white hover:bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 bg-stone-950 flex items-center justify-center max-h-[75vh]">
+              <img
+                src={selectedEvidenceUrl}
+                alt="Evidencia ampliada"
+                className="max-h-[70vh] w-auto object-contain rounded-lg"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

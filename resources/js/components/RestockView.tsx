@@ -28,12 +28,10 @@ export const RestockView: React.FC<RestockViewProps> = ({
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'todos' | 'agotados' | 'bajos' | 'criticos_peps'>('todos');
 
-  // Identificar si el usuario actual es cajero
   const isCajero = (currentUser?.rol || currentUser?.role) === 'cajero';
 
-  // Extractores seguros adaptados a PostgreSQL y relaciones Eloquent
   const getNombre = (p: Producto) => p.nombre ?? 'Sin nombre';
-  
+
   const getCategoria = (p: Producto): string => {
     if (typeof p.categoria === 'object' && p.categoria !== null) {
       return (p.categoria as any).nombre ?? 'General';
@@ -42,7 +40,7 @@ export const RestockView: React.FC<RestockViewProps> = ({
   };
 
   const getCodigo = (p: Producto) => p.barcode ?? p.codigoBarras ?? p.sku ?? String(p.id ?? '');
-  
+
   const getStock = (p: Producto): number => {
     if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
       return p.inventarios.reduce((acc, inv) => acc + Number(inv.stock ?? 0), 0);
@@ -53,13 +51,29 @@ export const RestockView: React.FC<RestockViewProps> = ({
   const getMinStock = (p: Producto): number => Number(p.min_stock ?? p.stockMinimo ?? p.minStock ?? 1);
   const getUnidad = (p: Producto) => p.unidad_medida ?? p.unidadMedida ?? 'pza';
 
-  // Productos que requieren atención (Agotados, Bajos o Próximos a Vencer)
+  // Extrae la fecha de caducidad más próxima desde la relación inventarios[] de PostgreSQL
+  const getFechaCaducidad = (p: Producto): string | null => {
+    if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
+      const fechasValidas = p.inventarios
+        .map((inv: any) => inv.fecha_caducidad)
+        .filter((f: any) => Boolean(f))
+        .map((f: any) => String(f).split('T')[0])
+        .sort();
+
+      if (fechasValidas.length > 0) {
+        return fechasValidas[0];
+      }
+    }
+    return p.fechaCaducidadProxima ? String(p.fechaCaducidadProxima).split('T')[0] : null;
+  };
+
   const productosEnAlerta = productos.filter((p) => {
     const stock = getStock(p);
     const minStock = getMinStock(p);
     const isAgotado = stock === 0;
     const isBajo = stock <= minStock;
-    const fifo = p.fechaCaducidadProxima ? getFifoStatus(p.fechaCaducidadProxima) : null;
+    const fechaCad = getFechaCaducidad(p);
+    const fifo = fechaCad ? getFifoStatus(fechaCad) : null;
     const isCriticoPeps = fifo ? fifo.nivel === 'critico' || fifo.nivel === 'proximo' || fifo.nivel === 'vencido' : false;
 
     return isAgotado || isBajo || isCriticoPeps;
@@ -74,14 +88,15 @@ export const RestockView: React.FC<RestockViewProps> = ({
 
     const stock = getStock(p);
     const minStock = getMinStock(p);
-    const fifo = p.fechaCaducidadProxima ? getFifoStatus(p.fechaCaducidadProxima) : null;
+    const fechaCad = getFechaCaducidad(p);
+    const fifo = fechaCad ? getFifoStatus(fechaCad) : null;
 
     if (!matchSearch) return false;
 
     if (filterType === 'agotados') return stock === 0;
     if (filterType === 'bajos') return stock > 0 && stock <= minStock;
     if (filterType === 'criticos_peps') {
-      return fifo ? fifo.nivel === 'critico' || fifo.nivel === 'vencido' : false;
+      return fifo ? fifo.nivel === 'critico' || fifo.nivel === 'proximo' || fifo.nivel === 'vencido' : false;
     }
 
     return true;
@@ -90,9 +105,10 @@ export const RestockView: React.FC<RestockViewProps> = ({
   const countAgotados = productos.filter((p) => getStock(p) === 0).length;
   const countBajos = productos.filter((p) => getStock(p) > 0 && getStock(p) <= getMinStock(p)).length;
   const countPeps = productos.filter((p) => {
-    if (!p.fechaCaducidadProxima) return false;
-    const f = getFifoStatus(p.fechaCaducidadProxima);
-    return f.nivel === 'critico' || f.nivel === 'vencido';
+    const fechaCad = getFechaCaducidad(p);
+    if (!fechaCad) return false;
+    const f = getFifoStatus(fechaCad);
+    return f.nivel === 'critico' || f.nivel === 'proximo' || f.nivel === 'vencido';
   }).length;
 
   return (
@@ -113,7 +129,6 @@ export const RestockView: React.FC<RestockViewProps> = ({
             </p>
           </div>
 
-          {/* Ocultar botón de Alta si es cajero */}
           {!isCajero && onOpenNewProductModal && (
             <button
               onClick={onOpenNewProductModal}
@@ -223,7 +238,9 @@ export const RestockView: React.FC<RestockViewProps> = ({
           const minStock = getMinStock(prod);
           const cat = getCategoria(prod);
           const isAgotado = stock === 0;
-          const fifo = prod.fechaCaducidadProxima ? getFifoStatus(prod.fechaCaducidadProxima) : null;
+          const isBajo = stock > 0 && stock <= minStock;
+          const fechaCad = getFechaCaducidad(prod);
+          const fifo = fechaCad ? getFifoStatus(fechaCad) : null;
           const cantSugeridaResurtido = Math.max(minStock * 2 - stock, minStock);
 
           return (
@@ -232,7 +249,9 @@ export const RestockView: React.FC<RestockViewProps> = ({
               className={`bg-white rounded-2xl p-5 border transition flex flex-col justify-between shadow-2xs hover:shadow-sm ${
                 isAgotado
                   ? 'border-rose-300 ring-1 ring-rose-100'
-                  : 'border-amber-300 ring-1 ring-amber-100'
+                  : isBajo
+                  ? 'border-amber-300 ring-1 ring-amber-100'
+                  : 'border-orange-300 ring-1 ring-orange-100'
               }`}
             >
               <div>
@@ -257,9 +276,13 @@ export const RestockView: React.FC<RestockViewProps> = ({
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300 inline-flex items-center gap-1">
                         Agotado
                       </span>
-                    ) : (
+                    ) : isBajo ? (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-1">
                         Stock Bajo
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-orange-800 border border-orange-300 inline-flex items-center gap-1">
+                        Por Caducar
                       </span>
                     )}
                   </div>
@@ -269,7 +292,7 @@ export const RestockView: React.FC<RestockViewProps> = ({
                 <div className="py-2.5 border-y border-stone-100 space-y-1.5 text-xs">
                   <div className="flex justify-between items-center text-stone-600">
                     <span>Stock Actual:</span>
-                    <span className={`font-extrabold ${isAgotado ? 'text-rose-600' : 'text-amber-700'}`}>
+                    <span className={`font-extrabold ${isAgotado ? 'text-rose-600' : isBajo ? 'text-amber-700' : 'text-stone-800'}`}>
                       {stock} {getUnidad(prod)}
                     </span>
                   </div>

@@ -17,24 +17,22 @@ class RegistroMerma extends Model
         'catalogo_merma_id',
         'cantidad',
         'costo_total_perdida',
+        'imagen_evidencia',
         'notas',
     ];
 
-    // La merma pertenece a un lote de inventario
     public function inventario()
     {
         return $this->belongsTo(Inventario::class, 'inventario_id');
     }
 
-    // La merma fue registrada por un usuario
-    public function usuario()
-    {
-        return $this->belongsTo(User::class, 'user_id');
-    }
-
-    // La merma pertenece a una razón del catálogo
-    public function razon()
+    public function catalogoMerma()
     {
         return $this->belongsTo(CatalogoMerma::class, 'catalogo_merma_id');
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 }

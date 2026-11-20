@@ -15,6 +15,12 @@ import { UserFormModal } from './components/UserFormModal';
 import { QuickMermaModal } from './components/QuickMermaModal';
 import { NotificationToast } from './components/NotificationToast';
 
+const MOTIVO_LABELS: Record<string, string> = {
+  caducidad: 'Fecha Vencida / Caducidad',
+  empaque_danado: 'Empaque Dañado / Roto',
+  otro: 'Robo / Ajuste / Otro',
+};
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(() => {
     const savedUser = localStorage.getItem('mi_tiendita_user');
@@ -163,25 +169,32 @@ export default function App() {
     motivoId: MotivoMermaId;
     notas: string;
     responsable: string;
+    imagenFile?: File | null;
   }) => {
     const prod = productos.find((p) => String(p.id) === String(mermaData.productoId));
     if (!prod) return;
 
     const cantidadRetirada = Number(mermaData.cantidad);
+    const motivoNombre = MOTIVO_LABELS[mermaData.motivoId] || 'Fecha Vencida / Caducidad';
 
     try {
+      const formData = new FormData();
+      formData.append('productoId', String(prod.id));
+      formData.append('user_id', String(currentUser.id ?? 1));
+      formData.append('cantidad', String(cantidadRetirada));
+      formData.append('motivo_nombre', motivoNombre);
+      formData.append('notas', mermaData.notas || '');
+
+      if (mermaData.imagenFile) {
+        formData.append('imagen_evidencia', mermaData.imagenFile);
+      }
+
       const res = await fetch('/api/mermas', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({
-          productoId: prod.id,
-          user_id: currentUser.id ?? 1,
-          cantidad: cantidadRetirada,
-          notas: mermaData.notas,
-        }),
+        body: formData,
       });
 
       const data = await res.json();
@@ -263,7 +276,13 @@ export default function App() {
   const countAlertas = productos.filter((p) => {
     const stock = p.inventarios?.[0]?.stock ?? p.stockActual ?? p.stock ?? 0;
     const min = p.min_stock ?? p.stockMinimo ?? p.minStock ?? 1;
-    return stock <= min;
+    const fechaCad = p.inventarios?.[0]?.fecha_caducidad ?? p.fechaCaducidadProxima;
+    let isPeps = false;
+    if (fechaCad) {
+      const diffDias = Math.ceil((new Date(fechaCad).getTime() - new Date().setHours(0, 0, 0, 0)) / (1000 * 60 * 60 * 24));
+      isPeps = diffDias <= 3;
+    }
+    return stock <= min || isPeps;
   }).length;
 
   return (

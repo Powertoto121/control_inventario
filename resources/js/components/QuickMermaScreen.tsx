@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Producto, MotivoMermaId, Usuario } from '../types';
 import { getFifoStatus } from '../utils/fifoUtils';
-import { CalendarX2, PackageX, AlertTriangle, HelpCircle, Check, Search } from 'lucide-react';
+import { CalendarX2, PackageX, AlertTriangle, HelpCircle, Check, Search, Camera, Trash2 } from 'lucide-react';
 
 interface QuickMermaScreenProps {
   productos: Producto[];
@@ -12,6 +12,7 @@ interface QuickMermaScreenProps {
     motivoId: MotivoMermaId;
     notas: string;
     responsable: string;
+    imagenFile?: File | null;
   }) => void;
   onClose?: () => void;
 }
@@ -33,8 +34,13 @@ export const QuickMermaScreen: React.FC<QuickMermaScreenProps> = ({
     currentUser?.nombre || currentUser?.name || 'Turno Mostrador'
   );
 
+  // Evidencia fotográfica
+  const [imagenFile, setImagenFile] = useState<File | null>(null);
+  const [imagenPreview, setImagenPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const getNombre = (p: Producto) => p.nombre ?? 'Sin nombre';
-  
+
   const getCategoria = (p: Producto): string => {
     if (typeof p.categoria === 'object' && p.categoria !== null) {
       return (p.categoria as any).nombre ?? 'General';
@@ -43,7 +49,7 @@ export const QuickMermaScreen: React.FC<QuickMermaScreenProps> = ({
   };
 
   const getCodigo = (p: Producto) => p.barcode ?? p.codigoBarras ?? p.sku ?? String(p.id ?? '');
-  
+
   const getStock = (p: Producto): number => {
     if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
       return p.inventarios.reduce((acc, inv) => acc + Number(inv.stock ?? 0), 0);
@@ -53,7 +59,6 @@ export const QuickMermaScreen: React.FC<QuickMermaScreenProps> = ({
 
   const getUnidad = (p: Producto) => p.unidad_medida ?? p.unidadMedida ?? 'pza';
 
-  // Función auxiliar blindada para el costo de compra
   const getCost = (p: Producto): number => {
     if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
       return Number(p.inventarios[0]?.precio_costo ?? 0);
@@ -88,6 +93,19 @@ export const QuickMermaScreen: React.FC<QuickMermaScreenProps> = ({
     ? (getCost(selectedProduct) * cantidad).toFixed(2)
     : '0.00';
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImagenFile(file);
+    setImagenPreview(URL.createObjectURL(file));
+  };
+
+  const clearImage = () => {
+    setImagenFile(null);
+    setImagenPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleConfirm = () => {
     if (!selectedProduct || cantidad <= 0) return;
 
@@ -97,11 +115,13 @@ export const QuickMermaScreen: React.FC<QuickMermaScreenProps> = ({
       motivoId: selectedMotivo,
       notas,
       responsable,
+      imagenFile,
     });
 
     setSelectedProductoId('');
     setCantidad(1);
     setNotas('');
+    clearImage();
   };
 
   const motivosDisponibles: Array<{ id: MotivoMermaId; label: string; desc: string; icon: React.ReactNode }> = [
@@ -303,6 +323,54 @@ export const QuickMermaScreen: React.FC<QuickMermaScreenProps> = ({
                       );
                     })}
                   </div>
+                </div>
+
+                {/* Evidencia Fotográfica (Cámara en móvil / Archivo en PC) */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-stone-700 block">
+                    Evidencia fotográfica (opcional):
+                  </label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+                  {!imagenPreview ? (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full py-2.5 px-3 rounded-xl border-2 border-dashed border-stone-300 hover:border-amber-500 bg-stone-50 hover:bg-amber-50/40 text-stone-600 hover:text-amber-800 transition flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer"
+                    >
+                      <Camera className="w-4 h-4 text-amber-600" />
+                      <span>Tomar foto o subir imagen</span>
+                    </button>
+                  ) : (
+                    <div className="relative rounded-xl border border-stone-200 overflow-hidden bg-stone-100 flex items-center gap-3 p-2">
+                      <img
+                        src={imagenPreview}
+                        alt="Evidencia de merma"
+                        className="w-14 h-14 object-cover rounded-lg border border-stone-300 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-stone-800 truncate">
+                          {imagenFile?.name || 'Foto adjunta'}
+                        </p>
+                        <p className="text-[10px] text-emerald-700 font-medium">
+                          Lista para guardar
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={clearImage}
+                        className="p-1.5 rounded-lg bg-white hover:bg-rose-50 text-stone-500 hover:text-rose-600 border border-stone-200 cursor-pointer"
+                        title="Quitar foto"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {!isCajero && (
