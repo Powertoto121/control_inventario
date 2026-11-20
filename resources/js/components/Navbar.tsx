@@ -2,7 +2,6 @@ import React from 'react';
 import { Usuario } from '../types';
 import { 
   Package, 
-  RefreshCw, 
   AlertTriangle, 
   BarChart3, 
   Users, 
@@ -85,11 +84,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Package className="w-4 h-4" />
             <span>Inventario & Stock</span>
-            {totalAlertsCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white font-black">
-                {totalAlertsCount}
-              </span>
-            )}
           </button>
 
           <button
@@ -114,6 +108,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <AlertTriangle className="w-4 h-4" />
             <span>Alertas de Reabastecimiento</span>
+            {totalAlertsCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white font-black">
+                {totalAlertsCount}
+              </span>
+            )}
           </button>
 
           {!isCajero && (

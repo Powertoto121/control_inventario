@@ -19,7 +19,8 @@ class UserController extends Controller
                 'email' => $u->email,
                 'password' => $u->remember_token ?? '1234',
                 'rol' => $u->rol === 'administrador' ? 'admin' : $u->rol,
-                'turno' => 'Completo',
+                'turno' => $u->turno ?? 'Completo',
+                'telefono' => $u->telefono ?? '',
                 'activo' => (bool) ($u->activo ?? true),
                 'fechaAlta' => $u->created_at ? $u->created_at->format('Y-m-d') : '2026-01-01',
             ];
@@ -44,6 +45,8 @@ class UserController extends Controller
             'password' => $request->password,
             'remember_token' => $request->password,
             'rol' => $rolDb,
+            'turno' => $request->turno ?? 'Completo',
+            'telefono' => $request->telefono ?: null,
             'activo' => $request->has('activo') ? (bool) $request->activo : true,
         ]);
 
@@ -69,6 +72,14 @@ class UserController extends Controller
 
         if ($request->has('rol')) {
             $data['rol'] = ($request->rol === 'admin' || $request->rol === 'administrador') ? 'administrador' : 'cajero';
+        }
+
+        if ($request->has('turno')) {
+            $data['turno'] = $request->turno ?: 'Completo';
+        }
+
+        if ($request->has('telefono')) {
+            $data['telefono'] = $request->telefono ?: null;
         }
 
         if ($request->has('activo')) {

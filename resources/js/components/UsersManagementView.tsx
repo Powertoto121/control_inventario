@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   UserX,
   Clock,
-  Phone,
   Store,
 } from 'lucide-react';
 
@@ -36,6 +35,7 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMode, setFilterMode] = useState<'todos' | 'cajero' | 'admin' | 'inactivos'>('todos');
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
+  const [showPhones, setShowPhones] = useState<Record<string, boolean>>({});
 
   const getNombre = (u: Usuario) => u.nombre || u.name || 'Sin nombre';
   const getUsername = (u: Usuario) => u.username || '';
@@ -53,6 +53,14 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
   const togglePasswordVisibility = (userId: string | number) => {
     const key = String(userId);
     setShowPasswords((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const togglePhoneVisibility = (userId: string | number) => {
+    const key = String(userId);
+    setShowPhones((prev) => ({
       ...prev,
       [key]: !prev[key],
     }));
@@ -114,7 +122,7 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
         </div>
       </div>
 
-      {/* KPI Cards (5 tarjetas limpias sin emojis) */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs">
           <div className="flex items-center justify-between text-stone-500 mb-1">
@@ -229,6 +237,8 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
           const activo = getActivo(user);
           const isCurrentUser = username.toLowerCase() === currentUsername;
           const isPassVisible = showPasswords[String(userId)] || false;
+          const isPhoneVisible = showPhones[String(userId)] || false;
+          const telefono = (user.telefono || '').trim();
 
           return (
             <div
@@ -329,15 +339,25 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
                     </div>
                   </div>
 
-                  {user.telefono && (
-                    <div className="flex items-center justify-between text-stone-600">
-                      <span className="text-stone-400 font-medium">Contacto:</span>
-                      <span className="font-medium text-stone-700 flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-stone-400" />
-                        {user.telefono}
-                      </span>
-                    </div>
-                  )}
+                  {/* Teléfono con mismo estilo de visibilidad */}
+                  <div className="flex items-center justify-between text-stone-600">
+                    <span className="text-stone-400 font-medium">Teléfono:</span>
+                    {telefono ? (
+                      <div className="flex items-center gap-1 font-mono font-bold text-stone-900">
+                        <span>{isPhoneVisible ? telefono : '••••••••••'}</span>
+                        <button
+                          type="button"
+                          onClick={() => togglePhoneVisibility(userId)}
+                          className="p-1 hover:bg-stone-100 rounded text-stone-400 hover:text-stone-700 cursor-pointer"
+                          title={isPhoneVisible ? 'Ocultar teléfono' : 'Ver teléfono'}
+                        >
+                          {isPhoneVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-stone-400 italic text-[11px]">No registrado</span>
+                    )}
+                  </div>
 
                   <div className="flex items-center justify-between text-stone-400 text-[11px]">
                     <span>Alta en sistema:</span>
