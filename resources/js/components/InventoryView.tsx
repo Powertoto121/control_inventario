@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Producto, Usuario } from '../types';
 import { getFifoStatus } from '../utils/fifoUtils';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
@@ -24,6 +24,7 @@ interface InventoryViewProps {
   onEditProduct: (product: Producto) => void;
   onDeleteProduct: (productId: number | string) => void;
   onOpenQuickMermaForProduct: (product: Producto) => void;
+  externalScannerTrigger?: number;
 }
 
 export const InventoryView: React.FC<InventoryViewProps> = ({
@@ -33,10 +34,18 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   onEditProduct,
   onDeleteProduct,
   onOpenQuickMermaForProduct,
+  externalScannerTrigger = 0,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  // Abrir escáner automáticamente cuando se agita el dispositivo (Acelerómetro)
+  useEffect(() => {
+    if (externalScannerTrigger > 0) {
+      setIsScannerOpen(true);
+    }
+  }, [externalScannerTrigger]);
 
   const isCajero = (currentUser?.rol || currentUser?.role) === 'cajero';
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { X, Camera, AlertCircle } from 'lucide-react';
+import { triggerVibration } from '../utils/deviceFeedback';
 
 interface BarcodeScannerModalProps {
   isOpen: boolean;
@@ -93,6 +94,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           async (decodedText) => {
             if (cancelled) return;
             cancelled = true;
+            isRunning = true;
+            await triggerVibration('scan');
             await stopSafely();
             onScanSuccessRef.current(decodedText.trim());
             onCloseRef.current();

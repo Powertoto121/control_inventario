@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Producto, Usuario, RegistroMerma, MotivoMermaId } from './types';
 
@@ -15,11 +15,25 @@ import { UserFormModal } from './components/UserFormModal';
 import { QuickMermaModal } from './components/QuickMermaModal';
 import { NotificationToast } from './components/NotificationToast';
 
+import {
+  triggerVibration,
+  requestLocalNotificationPermission,
+  sendLocalSystemNotification,
+  enableScreenKeepAwake,
+  subscribeToAmbientLightSensor,
+  subscribeToShakeAccelerometer,
+  AmbientLightStatus,
+} from './utils/deviceFeedback';
+
+import { apiFetch, autoDiscoverServer } from './utils/apiConfig';
+
 const MOTIVO_LABELS: Record<string, string> = {
   caducidad: 'Fecha Vencida / Caducidad',
   empaque_danado: 'Empaque Dañado / Roto',
   otro: 'Robo / Ajuste / Otro',
 };
+
+type AppTab = 'inventory' | 'quick-merma' | 'restock' | 'analytics' | 'users';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(() => {
@@ -27,7 +41,16 @@ export default function App() {
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  const [currentTab, setCurrentTab] = useState<'inventory' | 'quick-merma' | 'restock' | 'analytics' | 'users'>('inventory');
+  const [currentTab, setCurrentTab] = useState<AppTab>(() => {
+    const savedTab = localStorage.getItem('mi_tiendita_tab') as AppTab | null;
+    const validTabs: AppTab[] = ['inventory', 'quick-merma', 'restock', 'analytics', 'users'];
+    return savedTab && validTabs.includes(savedTab) ? savedTab : 'inventory';
+  });
+
+  const changeTab = (tab: AppTab) => {
+    setCurrentTab(tab);
+    localStorage.setItem('mi_tiendita_tab', tab);
+  };
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -44,6 +67,17 @@ export default function App() {
   const [mermaTargetProduct, setMermaTargetProduct] = useState<Producto | null>(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [ambientLight, setAmbientLight] = useState<AmbientLightStatus | null>(null);
+  const [scannerTrigger, setScannerTrigger] = useState<number>(0);
+  const lastNotifiedAlertsRef = useRef<number>(0);
+
+  const isAdmin = Boolean(
+    currentUser &&
+      (currentUser.rol === 'admin' ||
+        currentUser.rol === 'administrador' ||
+        currentUser.role === 'admin' ||
+        currentUser.role === 'administrador')
+  );
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -52,7 +86,7 @@ export default function App() {
 
   const fetchProductos = async () => {
     try {
-      const res = await fetch('/api/productos', {
+      const res = await apiFetch('/api/productos', {
         headers: { 'Accept': 'application/json' },
       });
       const data = await res.json();
@@ -66,7 +100,7 @@ export default function App() {
 
   const fetchMermas = async () => {
     try {
-      const res = await fetch('/api/mermas', {
+      const res = await apiFetch('/api/mermas', {
         headers: { 'Accept': 'application/json' },
       });
       const data = await res.json();
@@ -80,7 +114,7 @@ export default function App() {
 
   const fetchUsuarios = async () => {
     try {
-      const res = await fetch('/api/users', {
+      const res = await apiFetch('/api/users', {
         headers: { 'Accept': 'application/json' },
       });
       const data = await res.json();
@@ -92,33 +126,115 @@ export default function App() {
     }
   };
 
+  // Carga inicial, sincronización simultánea cada 15s y sensores de dispositivo
   useEffect(() => {
-    if (currentUser) {
-      fetchProductos();
-      fetchMermas();
-      fetchUsuarios();
+    if (!currentUser) return;
+
+    const syncAllData = async () => {
+      await autoDiscoverServer();
+      void fetchProductos();
+      void fetchMermas();
+      void fetchUsuarios();
+    };
+
+    void syncAllData();
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void fetchProductos();
+        void fetchMermas();
+        void fetchUsuarios();
+      }
+    }, 15000);
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        void syncAllData();
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    if (isAdmin) {
+      void requestLocalNotificationPermission();
     }
-  }, [currentUser]);
+
+    let releaseWakeLock: (() => void) | undefined;
+    enableScreenKeepAwake().then((release) => {
+      releaseWakeLock = release;
+    });
+
+    // Sensor 1: Luz ambiental
+    const unsubscribeLight = subscribeToAmbientLightSensor((status) => {
+      setAmbientLight(status);
+    });
+
+    // Sensor 2: Acelerómetro (agitar dispositivo para abrir escáner directo)
+    const unsubscribeShake = subscribeToShakeAccelerometer(() => {
+      void triggerVibration('scan');
+      changeTab('inventory');
+      setScannerTrigger((prev) => prev + 1);
+      showToast('Acelerómetro detectado: abriendo escáner...');
+    });
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      if (releaseWakeLock) releaseWakeLock();
+      unsubscribeLight();
+      unsubscribeShake();
+    };
+  }, [currentUser, isAdmin]);
+
+  const countAlertas = productos.filter((p) => {
+    const stock = p.inventarios?.[0]?.stock ?? p.stockActual ?? p.stock ?? 0;
+    const min = p.min_stock ?? p.stockMinimo ?? p.minStock ?? 1;
+    const fechaCad = p.inventarios?.[0]?.fecha_caducidad ?? p.fechaCaducidadProxima;
+    let isPeps = false;
+    if (fechaCad) {
+      const diffDias = Math.ceil((new Date(fechaCad).getTime() - new Date().setHours(0, 0, 0, 0)) / (1000 * 60 * 60 * 24));
+      isPeps = diffDias <= 3;
+    }
+    return stock <= min || isPeps;
+  }).length;
+
+  // Disparar notificación del sistema + vibración ÚNICAMENTE al Administrador
+  useEffect(() => {
+    if (!currentUser || !isAdmin) return;
+
+    if (countAlertas > 0 && countAlertas !== lastNotifiedAlertsRef.current) {
+      lastNotifiedAlertsRef.current = countAlertas;
+      const body =
+        countAlertas === 1
+          ? 'Tienes 1 producto en stock crítico o próximo a caducar.'
+          : `Tienes ${countAlertas} productos en stock crítico o próximos a caducar.`;
+
+      void triggerVibration('alert');
+      void sendLocalSystemNotification('⚠️ Alerta de Reabastecimiento', body, 1001);
+    } else if (countAlertas === 0) {
+      lastNotifiedAlertsRef.current = 0;
+    }
+  }, [countAlertas, currentUser, isAdmin]);
 
   if (!currentUser) {
     return (
       <LoginScreen
         onLogin={(user) => {
           setCurrentUser(user);
-          setCurrentTab('inventory');
+          changeTab('inventory');
           localStorage.setItem('mi_tiendita_user', JSON.stringify(user));
+          void triggerVibration('success');
           showToast(`¡Bienvenido de nuevo, ${user.nombre || user.name}!`);
         }}
       />
     );
   }
 
-  const isAdmin = currentUser.rol === 'admin' || currentUser.rol === 'administrador' || currentUser.role === 'admin' || currentUser.role === 'administrador';
-
   const handleSaveProduct = async (productData: any, existingId?: number) => {
     try {
       if (existingId) {
-        const res = await fetch(`/api/productos/${existingId}`, {
+        const res = await apiFetch(`/api/productos/${existingId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -128,9 +244,10 @@ export default function App() {
         });
         if (!res.ok) throw new Error('Error al actualizar en servidor');
         await fetchProductos();
+        void triggerVibration('success');
         showToast('¡Producto actualizado exitosamente en la BD!');
       } else {
-        const res = await fetch('/api/productos', {
+        const res = await apiFetch('/api/productos', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -138,27 +255,36 @@ export default function App() {
           },
           body: JSON.stringify(productData),
         });
-        if (!res.ok) throw new Error('Error al crear en servidor');
+        const data = await res.json();
+        if (!res.ok) {
+          void triggerVibration('error');
+          showToast(data.message || 'Error al crear en servidor');
+          return;
+        }
         await fetchProductos();
+        void triggerVibration('success');
         showToast('¡Nuevo producto guardado en la base de datos!');
       }
     } catch (error) {
       console.error(error);
+      void triggerVibration('error');
       showToast('Error al guardar el producto en la base de datos.');
     }
   };
 
   const handleDeleteProduct = async (productId: number | string) => {
     try {
-      const res = await fetch(`/api/productos/${productId}`, {
+      const res = await apiFetch(`/api/productos/${productId}`, {
         method: 'DELETE',
         headers: { 'Accept': 'application/json' },
       });
       if (!res.ok && res.status !== 404) throw new Error('Error al eliminar');
       setProductos((prev) => prev.filter((p) => p.id !== productId));
+      void triggerVibration('success');
       showToast('Producto eliminado de la base de datos.');
     } catch (error) {
       console.error(error);
+      void triggerVibration('error');
       showToast('No se pudo eliminar el producto.');
     }
   };
@@ -189,7 +315,7 @@ export default function App() {
         formData.append('imagen_evidencia', mermaData.imagenFile);
       }
 
-      const res = await fetch('/api/mermas', {
+      const res = await apiFetch('/api/mermas', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
@@ -199,15 +325,18 @@ export default function App() {
 
       const data = await res.json();
       if (!res.ok) {
+        void triggerVibration('error');
         showToast(data.message || 'Error al registrar la merma.');
         return;
       }
 
       await fetchProductos();
       await fetchMermas();
+      void triggerVibration('success');
       showToast(`Merma guardada en BD: -${cantidadRetirada} de ${prod.nombre}`);
     } catch (error) {
       console.error(error);
+      void triggerVibration('error');
       showToast('Error de conexión al registrar merma.');
     }
   };
@@ -217,7 +346,7 @@ export default function App() {
 
     try {
       if (idToUpdate) {
-        const res = await fetch(`/api/users/${idToUpdate}`, {
+        const res = await apiFetch(`/api/users/${idToUpdate}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -227,9 +356,10 @@ export default function App() {
         });
         if (!res.ok) throw new Error('Error al actualizar usuario');
         await fetchUsuarios();
+        void triggerVibration('success');
         showToast('¡Datos del empleado actualizados en la BD!');
       } else {
-        const res = await fetch('/api/users', {
+        const res = await apiFetch('/api/users', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -239,14 +369,17 @@ export default function App() {
         });
         const data = await res.json();
         if (!res.ok) {
+          void triggerVibration('error');
           showToast(data.message || 'Error al registrar empleado');
           return;
         }
         await fetchUsuarios();
+        void triggerVibration('success');
         showToast('¡Nuevo empleado registrado en PostgreSQL!');
       }
     } catch (error) {
       console.error(error);
+      void triggerVibration('error');
       showToast('Error al guardar el usuario en la base de datos.');
     }
   };
@@ -258,7 +391,7 @@ export default function App() {
     const nuevoEstado = !(targetUser.activo ?? true);
 
     try {
-      const res = await fetch(`/api/users/${userId}`, {
+      const res = await apiFetch(`/api/users/${userId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -270,6 +403,7 @@ export default function App() {
       if (!res.ok) throw new Error('Error al cambiar estado en BD');
 
       await fetchUsuarios();
+      void triggerVibration('success');
       showToast(
         nuevoEstado
           ? `Acceso habilitado para ${targetUser.nombre || targetUser.name}.`
@@ -277,47 +411,39 @@ export default function App() {
       );
     } catch (error) {
       console.error(error);
+      void triggerVibration('error');
       showToast('No se pudo actualizar el estado del empleado en la base de datos.');
     }
   };
 
   const handleDeleteUser = async (userId: number | string) => {
     try {
-      const res = await fetch(`/api/users/${userId}`, {
+      const res = await apiFetch(`/api/users/${userId}`, {
         method: 'DELETE',
         headers: { 'Accept': 'application/json' },
       });
       if (!res.ok) throw new Error('Error al eliminar usuario');
       setUsuarios((prev) => prev.filter((u) => u.id !== userId));
+      void triggerVibration('success');
       showToast('Empleado eliminado de la base de datos.');
     } catch (error) {
       console.error(error);
+      void triggerVibration('error');
       showToast('No se pudo eliminar el empleado.');
     }
   };
-
-  const countAlertas = productos.filter((p) => {
-    const stock = p.inventarios?.[0]?.stock ?? p.stockActual ?? p.stock ?? 0;
-    const min = p.min_stock ?? p.stockMinimo ?? p.minStock ?? 1;
-    const fechaCad = p.inventarios?.[0]?.fecha_caducidad ?? p.fechaCaducidadProxima;
-    let isPeps = false;
-    if (fechaCad) {
-      const diffDias = Math.ceil((new Date(fechaCad).getTime() - new Date().setHours(0, 0, 0, 0)) / (1000 * 60 * 60 * 24));
-      isPeps = diffDias <= 3;
-    }
-    return stock <= min || isPeps;
-  }).length;
 
   return (
     <div className="min-h-screen bg-stone-100 flex flex-col font-sans text-stone-900 pb-12">
       <Navbar
         currentUser={currentUser}
         currentTab={currentTab}
-        onSelectTab={(tab) => setCurrentTab(tab)}
+        onSelectTab={changeTab}
         onLogout={() => {
           setCurrentUser(null);
           setCurrentTab('inventory');
           localStorage.removeItem('mi_tiendita_user');
+          localStorage.removeItem('mi_tiendita_tab');
           showToast('Sesión cerrada correctamente.');
         }}
         onOpenQuickMerma={() => {
@@ -345,6 +471,7 @@ export default function App() {
               setMermaTargetProduct(prod);
               setIsMermaModalOpen(true);
             }}
+            externalScannerTrigger={scannerTrigger}
           />
         )}
 
@@ -389,7 +516,7 @@ export default function App() {
             productos={productos}
             currentUser={currentUser}
             onSaveMerma={handleSaveMerma}
-            onClose={() => setCurrentTab('inventory')}
+            onClose={() => changeTab('inventory')}
           />
         )}
       </main>
@@ -424,8 +551,13 @@ export default function App() {
 
       {toastMessage && <NotificationToast message={toastMessage} />}
 
-      <footer className="max-w-7xl mx-auto w-full px-4 sm:px-6 pt-6 text-center text-xs text-stone-400">
+      <footer className="max-w-7xl mx-auto w-full px-4 sm:px-6 pt-6 text-center text-xs text-stone-400 space-y-1">
         <p>Mi Abarrotes • Sistema Oficial de Control de Inventario & Mermas</p>
+        {ambientLight && (
+          <p className="text-[11px] text-stone-500">
+            Sensor de luz activo: {ambientLight.lux} lx • Brillo automático al {ambientLight.brightnessPercent}%
+          </p>
+        )}
       </footer>
     </div>
   );
