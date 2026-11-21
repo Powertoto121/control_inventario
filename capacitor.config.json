@@ -1,0 +1,12 @@
+{
+  "appId": "com.miabarrotes.inventario",
+  "appName": "Mi Abarrotes",
+  "webDir": "public/capacitor-dist",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
